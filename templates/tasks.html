@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}تسک‌های امنیتی{% endblock %}
+{% set page_title = "تسک‌های امنیتی" %}
+{% block content %}
+  <form method="POST" class="mb-4">
+    <input name="title" class="form-control mb-2" placeholder="عنوان تسک" required>
+    <input name="description" class="form-control mb-2" placeholder="توضیحات" required>
+    <select name="status" class="form-select mb-2" required>
+      <option value="باز">باز</option>
+      <option value="در حال انجام">در حال انجام</option>
+      <option value="بسته">بسته</option>
+    </select>
+    <button type="submit" class="btn btn-primary">ذخیره</button>
+  </form>
+
+  <table class="table table-bordered table-striped">
+    <thead class="table-light">
+      <tr>
+        <th>عنوان</th>
+        <th>توضیحات</th>
+        <th>وضعیت</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for task in tasks %}
+      <tr>
+        <td>{{ task.title }}</td>
+        <td>{{ task.description }}</td>
+        <td>{{ task.status }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}مدیریت سرورها{% endblock %}
+{% set page_title = "مدیریت سرورها" %}
+{% block content %}
+  <form method="POST" class="mb-4">
+    <input name="name" class="form-control mb-2" placeholder="نام سرور" required>
+    <input name="ip_address" class="form-control mb-2" placeholder="آدرس IP" required>
+    <input name="os_type" class="form-control mb-2" placeholder="نوع سیستم‌عامل" required>
+    <select name="status" class="form-select mb-2" required>
+      <option value="فعال">فعال</option>
+      <option value="غیرفعال">غیرفعال</option>
+      <option value="در حال بررسی">در حال بررسی</option>
+    </select>
+    <button type="submit" class="btn btn-primary">ذخیره</button>
+  </form>
+
+  <table class="table table-bordered table-striped">
+    <thead class="table-light">
+      <tr>
+        <th>نام</th>
+        <th>IP</th>
+        <th>سیستم‌عامل</th>
+        <th>وضعیت</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for server in servers %}
+      <tr>
+        <td>{{ server.name }}</td>
+        <td>{{ server.ip_address }}</td>
+        <td>{{ server.os_type }}</td>
+        <td>{{ server.status }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

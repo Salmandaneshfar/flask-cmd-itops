@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}گزارش‌های بکاپ{% endblock %}
+{% set page_title = "گزارش‌های بکاپ" %}
+{% block content %}
+  <form method="POST" class="mb-4">
+    <input name="date" type="date" class="form-control mb-2" required>
+    <input name="type" class="form-control mb-2" placeholder="نوع بکاپ" required>
+    <input name="result" class="form-control mb-2" placeholder="نتیجه" required>
+    <input name="size" class="form-control mb-2" placeholder="حجم (MB)" required>
+    <button type="submit" class="btn btn-primary">ذخیره</button>
+  </form>
+
+  <table class="table table-bordered table-striped">
+    <thead class="table-light">
+      <tr>
+        <th>تاریخ</th>
+        <th>نوع</th>
+        <th>نتیجه</th>
+        <th>حجم</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for backup in backups %}
+      <tr>
+        <td>{{ backup.date }}</td>
+        <td>{{ backup.type }}</td>
+        <td>{{ backup.result }}</td>
+        <td>{{ backup.size }} MB</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
