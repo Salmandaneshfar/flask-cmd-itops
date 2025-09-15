@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% block page_title %}اضافه کردن بکاپ{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-plus"></i> اضافه کردن بکاپ جدید</h5>
+      </div>
+      <div class="card-body">
+        <form method="POST">
+          {{ form.hidden_tag() }}
+          
+          <div class="mb-3">
+            {{ form.name.label(class="form-label") }}
+            {{ form.name(class="form-control", placeholder="نام بکاپ") }}
+            {% if form.name.errors %}
+              <div class="text-danger">
+                {% for error in form.name.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          
+          <div class="mb-3">
+            {{ form.file_path.label(class="form-label") }}
+            {{ form.file_path(class="form-control", placeholder="/path/to/backup/file") }}
+            {% if form.file_path.errors %}
+              <div class="text-danger">
+                {% for error in form.file_path.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+            <small class="form-text text-muted">مسیر کامل فایل بکاپ</small>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              {{ form.file_size.label(class="form-label") }}
+              {{ form.file_size(class="form-control", type="number", placeholder="1024") }}
+              {% if form.file_size.errors %}
+                <div class="text-danger">
+                  {% for error in form.file_size.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              <small class="form-text text-muted">حجم فایل به بایت</small>
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              {{ form.backup_type.label(class="form-label") }}
+              {{ form.backup_type(class="form-select") }}
+              {% if form.backup_type.errors %}
+                <div class="text-danger">
+                  {% for error in form.backup_type.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            {{ form.status.label(class="form-label") }}
+            {{ form.status(class="form-select") }}
+            {% if form.status.errors %}
+              <div class="text-danger">
+                {% for error in form.status.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> ذخیره بکاپ
+            </button>
+            <a href="{{ url_for('backups') }}" class="btn btn-secondary">
+              <i class="fas fa-arrow-right"></i> بازگشت
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+    
+    <!-- راهنمای انواع بکاپ -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="fas fa-info-circle"></i> راهنمای انواع بکاپ</h6>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-4">
+            <h6><i class="fas fa-database text-primary"></i> دیتابیس</h6>
+            <p class="text-muted">بکاپ از جداول و داده‌های دیتابیس</p>
+          </div>
+          <div class="col-md-4">
+            <h6><i class="fas fa-folder text-success"></i> فایل‌ها</h6>
+            <p class="text-muted">بکاپ از فایل‌ها و پوشه‌های سیستم</p>
+          </div>
+          <div class="col-md-4">
+            <h6><i class="fas fa-archive text-warning"></i> کامل</h6>
+            <p class="text-muted">بکاپ کامل از دیتابیس و فایل‌ها</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// محاسبه خودکار حجم فایل
+document.querySelector('input[name="file_path"]').addEventListener('input', function() {
+  // اینجا می‌توانید کد محاسبه حجم فایل را اضافه کنید
+  console.log('File path changed:', this.value);
+});
+
+// اعتبارسنجی مسیر فایل
+document.querySelector('form').addEventListener('submit', function(e) {
+  const filePath = document.querySelector('input[name="file_path"]').value;
+  
+  if (filePath && !filePath.startsWith('/')) {
+    e.preventDefault();
+    alert('مسیر فایل باید با / شروع شود.');
+    return;
+  }
+});
+</script>
+{% endblock %}
+

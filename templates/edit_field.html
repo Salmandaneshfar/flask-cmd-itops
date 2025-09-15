@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>ویرایش فیلد سفارشی</h2>
+<form method="POST" class="card p-4">
+  <input type="text" name="label" value="{{ field.label }}" class="form-control mb-2" required>
+  <input type="text" name="value" value="{{ field.value }}" class="form-control mb-2" required>
+  <button type="submit" class="btn btn-primary">ذخیره</button>
+</form>
+{% endblock %}

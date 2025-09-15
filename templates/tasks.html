@@ -1,34 +1,230 @@
-{% extends "base.html" %}
-{% block title %}تسک‌های امنیتی{% endblock %}
-{% set page_title = "تسک‌های امنیتی" %}
+{% extends 'base.html' %}
+{% block page_title %}مدیریت تسک‌ها{% endblock %}
 {% block content %}
-  <form method="POST" class="mb-4">
-    <input name="title" class="form-control mb-2" placeholder="عنوان تسک" required>
-    <input name="description" class="form-control mb-2" placeholder="توضیحات" required>
-    <select name="status" class="form-select mb-2" required>
-      <option value="باز">باز</option>
-      <option value="در حال انجام">در حال انجام</option>
-      <option value="بسته">بسته</option>
-    </select>
-    <button type="submit" class="btn btn-primary">ذخیره</button>
-  </form>
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5><i class="fas fa-tasks"></i> مدیریت تسک‌ها</h5>
+  <a href="{{ url_for('add_task') }}" class="btn btn-primary">
+    <i class="fas fa-plus"></i> تسک جدید
+  </a>
+</div>
 
-  <table class="table table-bordered table-striped">
-    <thead class="table-light">
-      <tr>
-        <th>عنوان</th>
-        <th>توضیحات</th>
-        <th>وضعیت</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for task in tasks %}
-      <tr>
-        <td>{{ task.title }}</td>
-        <td>{{ task.description }}</td>
-        <td>{{ task.status }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<!-- فیلتر و جستجو -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="GET" class="row g-3">
+      <div class="col-md-4">
+        <input type="text" name="query" class="form-control" placeholder="جستجو در عنوان یا توضیحات تسک..." value="{{ request.args.get('query', '') }}">
+      </div>
+      <div class="col-md-2">
+        <select name="priority" class="form-select">
+          <option value="">همه اولویت‌ها</option>
+          <option value="urgent" {% if request.args.get('priority') == 'urgent' %}selected{% endif %}>فوری</option>
+          <option value="high" {% if request.args.get('priority') == 'high' %}selected{% endif %}>زیاد</option>
+          <option value="medium" {% if request.args.get('priority') == 'medium' %}selected{% endif %}>متوسط</option>
+          <option value="low" {% if request.args.get('priority') == 'low' %}selected{% endif %}>کم</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="status" class="form-select">
+          <option value="">همه وضعیت‌ها</option>
+          <option value="pending" {% if request.args.get('status') == 'pending' %}selected{% endif %}>در انتظار</option>
+          <option value="in_progress" {% if request.args.get('status') == 'in_progress' %}selected{% endif %}>در حال انجام</option>
+          <option value="completed" {% if request.args.get('status') == 'completed' %}selected{% endif %}>تکمیل شده</option>
+          <option value="cancelled" {% if request.args.get('status') == 'cancelled' %}selected{% endif %}>لغو شده</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="assigned_to" class="form-select">
+          <option value="">همه کاربران</option>
+          {% for user in User.query.filter_by(is_active=True).all() %}
+            <option value="{{ user.id }}" {% if request.args.get('assigned_to') == user.id|string %}selected{% endif %}>{{ user.username }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-outline-primary w-100">
+          <i class="fas fa-search"></i> جستجو
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    {% if tasks.items %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>عنوان</th>
+              <th>اولویت</th>
+              <th>وضعیت</th>
+              <th>واگذار شده به</th>
+              <th>تاریخ ایجاد</th>
+              {% if custom_fields_structure %}
+                {% for field_name, field_data in custom_fields_structure %}
+                  <th>{{ field_data.label }}</th>
+                {% endfor %}
+              {% endif %}
+              <th>عملیات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for task in tasks.items %}
+              <tr>
+                <td>
+                  <h6 class="mb-1">{{ task.title }}</h6>
+                  <small class="text-muted">{{ task.description[:50] }}{% if task.description|length > 50 %}...{% endif %}</small>
+                </td>
+                <td>
+                  <span class="badge bg-{{ 'danger' if task.priority == 'urgent' else 'warning' if task.priority == 'high' else 'info' if task.priority == 'medium' else 'secondary' }}">
+                    {{ task.priority }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge bg-{{ 'success' if task.status == 'completed' else 'warning' if task.status == 'in_progress' else 'secondary' }}">
+                    {{ task.status }}
+                  </span>
+                </td>
+                <td>
+                  {% if task.assigned_user %}
+                    {{ task.assigned_user.username }}
+                  {% else %}
+                    <span class="text-muted">واگذار نشده</span>
+                  {% endif %}
+                </td>
+                <td>{{ task.created_at.strftime('%Y/%m/%d') }}</td>
+                {% if custom_fields_data and custom_fields_data[task.id] %}
+                  {% for field_name, field_data in custom_fields_data[task.id].items() %}
+                    <td>
+                      {% if field_data.value %}
+                        {% if field_data.field_type == 'checkbox' %}
+                          <span class="badge bg-{{ 'success' if field_data.value == '1' else 'secondary' }}">
+                            {{ 'بله' if field_data.value == '1' else 'خیر' }}
+                          </span>
+                        {% elif field_data.field_type == 'date' %}
+                          {{ field_data.value }}
+                        {% elif field_data.field_type == 'url' %}
+                          <a href="{{ field_data.value }}" target="_blank" class="text-decoration-none">
+                            <i class="fas fa-external-link-alt"></i> لینک
+                          </a>
+                        {% elif field_data.field_type == 'email' %}
+                          <a href="mailto:{{ field_data.value }}" class="text-decoration-none">
+                            {{ field_data.value }}
+                          </a>
+                        {% else %}
+                          {{ field_data.value }}
+                        {% endif %}
+                      {% else %}
+                        <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                  {% endfor %}
+                {% endif %}
+                <td>
+                  <div class="btn-group" role="group">
+                    <button class="btn btn-sm btn-outline-primary" onclick="updateTaskStatus({{ task.id }}, 'in_progress')" title="شروع">
+                      <i class="fas fa-play"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-success" onclick="updateTaskStatus({{ task.id }}, 'completed')" title="تکمیل">
+                      <i class="fas fa-check"></i>
+                    </button>
+                    <a href="{{ url_for('edit_task', id=task.id) }}" class="btn btn-sm btn-outline-warning" title="ویرایش">
+                      <i class="fas fa-edit"></i>
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteTask({{ task.id }})" title="حذف">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- Pagination -->
+      {% if tasks.pages > 1 %}
+        <nav aria-label="صفحه‌بندی">
+          <ul class="pagination justify-content-center">
+            {% if tasks.has_prev %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('tasks', page=tasks.prev_num) }}">قبلی</a>
+              </li>
+            {% endif %}
+            
+            {% for page_num in tasks.iter_pages() %}
+              {% if page_num %}
+                {% if page_num != tasks.page %}
+                  <li class="page-item">
+                    <a class="page-link" href="{{ url_for('tasks', page=page_num) }}">{{ page_num }}</a>
+                  </li>
+                {% else %}
+                  <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                  </li>
+                {% endif %}
+              {% else %}
+                <li class="page-item disabled">
+                  <span class="page-link">...</span>
+                </li>
+              {% endif %}
+            {% endfor %}
+            
+            {% if tasks.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('tasks', page=tasks.next_num) }}">بعدی</a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      {% endif %}
+    {% else %}
+      <div class="text-center py-5">
+        <i class="fas fa-tasks fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">هیچ تسکی یافت نشد</h5>
+        <a href="{{ url_for('add_task') }}" class="btn btn-primary mt-3">
+          <i class="fas fa-plus"></i> اولین تسک را اضافه کنید
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateTaskStatus(taskId, status) {
+  fetch(`/api/task/${taskId}/status`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({status: status})
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert('خطا در به‌روزرسانی وضعیت تسک');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('خطا در به‌روزرسانی وضعیت تسک');
+  });
+}
+
+function deleteTask(taskId) {
+  if (confirm('آیا مطمئن هستید که می‌خواهید این تسک را حذف کنید؟')) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/tasks/delete/${taskId}`;
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+</script>
 {% endblock %}

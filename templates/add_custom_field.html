@@ -1,0 +1,242 @@
+{% extends 'base.html' %}
+{% block page_title %}اضافه کردن فیلد سفارشی{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-10">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-plus"></i> اضافه کردن فیلد سفارشی جدید</h5>
+      </div>
+      <div class="card-body">
+        <form method="POST" id="customFieldForm">
+          {{ form.hidden_tag() }}
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              {{ form.name.label(class="form-label") }}
+              {{ form.name(class="form-control", placeholder="مثال: phone_number") }}
+              {% if form.name.errors %}
+                <div class="text-danger">
+                  {% for error in form.name.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              <small class="form-text text-muted">نام فیلد باید به انگلیسی و بدون فاصله باشد</small>
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              {{ form.label.label(class="form-label") }}
+              {{ form.label(class="form-control", placeholder="مثال: شماره تلفن") }}
+              {% if form.label.errors %}
+                <div class="text-danger">
+                  {% for error in form.label.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              {{ form.field_type.label(class="form-label") }}
+              {{ form.field_type(class="form-select", id="fieldType") }}
+              {% if form.field_type.errors %}
+                <div class="text-danger">
+                  {% for error in form.field_type.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              {{ form.model_name.label(class="form-label") }}
+              {{ form.model_name(class="form-select") }}
+              {% if form.model_name.errors %}
+                <div class="text-danger">
+                  {% for error in form.model_name.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              {{ form.placeholder.label(class="form-label") }}
+              {{ form.placeholder(class="form-control", placeholder="مثال: شماره تلفن خود را وارد کنید") }}
+              {% if form.placeholder.errors %}
+                <div class="text-danger">
+                  {% for error in form.placeholder.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              {{ form.order.label(class="form-label") }}
+              {{ form.order(class="form-control", placeholder="0", type="number") }}
+              {% if form.order.errors %}
+                <div class="text-danger">
+                  {% for error in form.order.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              <small class="form-text text-muted">فیلدها بر اساس این عدد مرتب می‌شوند</small>
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            {{ form.help_text.label(class="form-label") }}
+            {{ form.help_text(class="form-control", rows="3", placeholder="راهنمای اضافی برای کاربران") }}
+            {% if form.help_text.errors %}
+              <div class="text-danger">
+                {% for error in form.help_text.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          
+          <!-- گزینه‌های انتخابی (فقط برای نوع select) -->
+          <div class="mb-3" id="optionsDiv" style="display: none;">
+            {{ form.options.label(class="form-label") }}
+            {{ form.options(class="form-control", rows="4", placeholder="هر خط یک گزینه\nمثال:\nگزینه 1\nگزینه 2\nگزینه 3") }}
+            {% if form.options.errors %}
+              <div class="text-danger">
+                {% for error in form.options.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+            <small class="form-text text-muted">هر خط یک گزینه باشد</small>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <div class="form-check">
+                {{ form.is_required(class="form-check-input") }}
+                {{ form.is_required.label(class="form-check-label") }}
+              </div>
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              <div class="form-check">
+                {{ form.is_active(class="form-check-input") }}
+                {{ form.is_active.label(class="form-check-label") }}
+              </div>
+            </div>
+          </div>
+          
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> ذخیره فیلد
+            </button>
+            <a href="{{ url_for('custom_fields') }}" class="btn btn-secondary">
+              <i class="fas fa-arrow-right"></i> بازگشت
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+    
+    <!-- راهنمای انواع فیلدها -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="fas fa-info-circle"></i> راهنمای انواع فیلدها</h6>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6">
+            <h6>انواع فیلدهای متنی:</h6>
+            <ul class="list-unstyled">
+              <li><strong>متن:</strong> فیلد متنی ساده</li>
+              <li><strong>متن طولانی:</strong> برای متن‌های بلند</li>
+              <li><strong>ایمیل:</strong> با اعتبارسنجی ایمیل</li>
+              <li><strong>لینک:</strong> برای URL ها</li>
+              <li><strong>شماره تلفن:</strong> برای شماره‌های تماس</li>
+            </ul>
+          </div>
+          <div class="col-md-6">
+            <h6>انواع فیلدهای دیگر:</h6>
+            <ul class="list-unstyled">
+              <li><strong>عدد:</strong> فقط اعداد</li>
+              <li><strong>تاریخ:</strong> انتخابگر تاریخ</li>
+              <li><strong>انتخاب از لیست:</strong> منوی کشویی</li>
+              <li><strong>چک باکس:</strong> تیک زدن</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// نمایش/مخفی کردن گزینه‌های انتخابی
+document.getElementById('fieldType').addEventListener('change', function() {
+  const optionsDiv = document.getElementById('optionsDiv');
+  if (this.value === 'select') {
+    optionsDiv.style.display = 'block';
+  } else {
+    optionsDiv.style.display = 'none';
+  }
+});
+
+// اعتبارسنجی نام فیلد
+document.getElementById('customFieldForm').addEventListener('submit', function(e) {
+  const nameField = document.querySelector('input[name="name"]');
+  const nameValue = nameField.value;
+  
+  // بررسی فرمت نام فیلد
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(nameValue)) {
+    e.preventDefault();
+    alert('نام فیلد باید با حرف یا _ شروع شود و فقط شامل حروف، اعداد و _ باشد.');
+    nameField.focus();
+    return;
+  }
+  
+  // بررسی حداقل طول
+  if (nameValue.length < 2) {
+    e.preventDefault();
+    alert('نام فیلد باید حداقل 2 کاراکتر باشد.');
+    nameField.focus();
+    return;
+  }
+});
+
+// پیش‌نمایش نام فیلد
+document.querySelector('input[name="name"]').addEventListener('input', function() {
+  const labelField = document.querySelector('input[name="label"]');
+  if (!labelField.value && this.value) {
+    // پیشنهاد برچسب بر اساس نام فیلد
+    const suggestions = {
+      'phone': 'شماره تلفن',
+      'address': 'آدرس',
+      'description': 'توضیحات',
+      'notes': 'یادداشت',
+      'priority': 'اولویت',
+      'status': 'وضعیت',
+      'category': 'دسته‌بندی',
+      'tags': 'برچسب‌ها',
+      'website': 'وب‌سایت',
+      'company': 'شرکت',
+      'department': 'بخش',
+      'position': 'سمت'
+    };
+    
+    const suggestion = suggestions[this.value.toLowerCase()];
+    if (suggestion) {
+      labelField.placeholder = suggestion;
+    }
+  }
+});
+</script>
+{% endblock %}

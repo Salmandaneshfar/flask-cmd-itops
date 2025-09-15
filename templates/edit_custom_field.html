@@ -1,0 +1,194 @@
+{% extends 'base.html' %}
+{% block page_title %}ویرایش فیلد سفارشی{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-10">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-edit"></i> ویرایش فیلد سفارشی: {{ field.name }}</h5>
+      </div>
+      <div class="card-body">
+        <form method="POST" id="customFieldForm">
+          {{ form.hidden_tag() }}
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">نام فیلد (غیرقابل تغییر)</label>
+              <input type="text" class="form-control" value="{{ field.name }}" disabled>
+              <small class="form-text text-muted">نام فیلد قابل تغییر نیست</small>
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              {{ form.label.label(class="form-label") }}
+              {{ form.label(class="form-control") }}
+              {% if form.label.errors %}
+                <div class="text-danger">
+                  {% for error in form.label.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              {{ form.field_type.label(class="form-label") }}
+              {{ form.field_type(class="form-select", id="fieldType") }}
+              {% if form.field_type.errors %}
+                <div class="text-danger">
+                  {% for error in form.field_type.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              <label class="form-label">مدل مربوطه (غیرقابل تغییر)</label>
+              <input type="text" class="form-control" value="{{ field.model_name }}" disabled>
+              <small class="form-text text-muted">مدل مربوطه قابل تغییر نیست</small>
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              {{ form.placeholder.label(class="form-label") }}
+              {{ form.placeholder(class="form-control") }}
+              {% if form.placeholder.errors %}
+                <div class="text-danger">
+                  {% for error in form.placeholder.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              {{ form.order.label(class="form-label") }}
+              {{ form.order(class="form-control", type="number") }}
+              {% if form.order.errors %}
+                <div class="text-danger">
+                  {% for error in form.order.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            {{ form.help_text.label(class="form-label") }}
+            {{ form.help_text(class="form-control", rows="3") }}
+            {% if form.help_text.errors %}
+              <div class="text-danger">
+                {% for error in form.help_text.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          
+          <!-- گزینه‌های انتخابی (فقط برای نوع select) -->
+          <div class="mb-3" id="optionsDiv" style="display: none;">
+            {{ form.options.label(class="form-label") }}
+            {{ form.options(class="form-control", rows="4") }}
+            {% if form.options.errors %}
+              <div class="text-danger">
+                {% for error in form.options.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+            <small class="form-text text-muted">هر خط یک گزینه باشد</small>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <div class="form-check">
+                {{ form.is_required(class="form-check-input") }}
+                {{ form.is_required.label(class="form-check-label") }}
+              </div>
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              <div class="form-check">
+                {{ form.is_active(class="form-check-input") }}
+                {{ form.is_active.label(class="form-check-label") }}
+              </div>
+            </div>
+          </div>
+          
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> ذخیره تغییرات
+            </button>
+            <a href="{{ url_for('custom_fields') }}" class="btn btn-secondary">
+              <i class="fas fa-arrow-right"></i> بازگشت
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+    
+    <!-- آمار فیلد -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="fas fa-chart-bar"></i> آمار فیلد</h6>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-3">
+            <div class="text-center">
+              <h5 class="text-primary">{{ field.values|length }}</h5>
+              <small class="text-muted">تعداد مقادیر</small>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-center">
+              <h5 class="text-success">{{ field.created_at.strftime('%Y/%m/%d') }}</h5>
+              <small class="text-muted">تاریخ ایجاد</small>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-center">
+              <h5 class="text-info">{{ field.updated_at.strftime('%Y/%m/%d') }}</h5>
+              <small class="text-muted">آخرین بروزرسانی</small>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-center">
+              <h5 class="text-warning">{{ field.order }}</h5>
+              <small class="text-muted">ترتیب نمایش</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// نمایش/مخفی کردن گزینه‌های انتخابی
+document.getElementById('fieldType').addEventListener('change', function() {
+  const optionsDiv = document.getElementById('optionsDiv');
+  if (this.value === 'select') {
+    optionsDiv.style.display = 'block';
+  } else {
+    optionsDiv.style.display = 'none';
+  }
+});
+
+// نمایش اولیه گزینه‌ها اگر نوع select باشد
+document.addEventListener('DOMContentLoaded', function() {
+  const fieldType = document.getElementById('fieldType');
+  const optionsDiv = document.getElementById('optionsDiv');
+  
+  if (fieldType.value === 'select') {
+    optionsDiv.style.display = 'block';
+  }
+});
+</script>
+{% endblock %}

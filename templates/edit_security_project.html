@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+{% block page_title %}ویرایش پروژه امنیتی{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-10">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-edit"></i> ویرایش پروژه امنیتی: {{ project.project_name }}</h5>
+      </div>
+      <div class="card-body">
+        <form method="POST" id="securityProjectForm">
+          {{ form.hidden_tag() }}
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              {{ form.project_name.label(class="form-label") }}
+              {{ form.project_name(class="form-control") }}
+              {% if form.project_name.errors %}
+                <div class="text-danger">
+                  {% for error in form.project_name.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              {{ form.contractor.label(class="form-label") }}
+              {{ form.contractor(class="form-control") }}
+              {% if form.contractor.errors %}
+                <div class="text-danger">
+                  {% for error in form.contractor.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              {{ form.project_type.label(class="form-label") }}
+              {{ form.project_type(class="form-select") }}
+              {% if form.project_type.errors %}
+                <div class="text-danger">
+                  {% for error in form.project_type.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-4 mb-3">
+              {{ form.environment.label(class="form-label") }}
+              {{ form.environment(class="form-select") }}
+              {% if form.environment.errors %}
+                <div class="text-danger">
+                  {% for error in form.environment.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-4 mb-3">
+              {{ form.priority.label(class="form-label") }}
+              {{ form.priority(class="form-select") }}
+              {% if form.priority.errors %}
+                <div class="text-danger">
+                  {% for error in form.priority.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              {{ form.security_status.label(class="form-label") }}
+              {{ form.security_status(class="form-select") }}
+              {% if form.security_status.errors %}
+                <div class="text-danger">
+                  {% for error in form.security_status.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              {{ form.assigned_to.label(class="form-label") }}
+              {{ form.assigned_to(class="form-select") }}
+              {% if form.assigned_to.errors %}
+                <div class="text-danger">
+                  {% for error in form.assigned_to.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              {{ form.start_date.label(class="form-label") }}
+              {{ form.start_date(class="form-control", type="datetime-local") }}
+              {% if form.start_date.errors %}
+                <div class="text-danger">
+                  {% for error in form.start_date.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-4 mb-3">
+              {{ form.completion_date.label(class="form-label") }}
+              {{ form.completion_date(class="form-control", type="datetime-local") }}
+              {% if form.completion_date.errors %}
+                <div class="text-danger">
+                  {% for error in form.completion_date.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-4 mb-3">
+              <label class="form-label">مدت زمان واقعی (روز)</label>
+              <input type="number" class="form-control" value="{{ project.actual_duration or '' }}" readonly>
+              <small class="form-text text-muted">محاسبه خودکار بر اساس تاریخ شروع و تکمیل</small>
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              {{ form.estimated_duration.label(class="form-label") }}
+              {{ form.estimated_duration(class="form-control", type="number") }}
+              {% if form.estimated_duration.errors %}
+                <div class="text-danger">
+                  {% for error in form.estimated_duration.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              <label class="form-label">درصد پیشرفت</label>
+              <div class="progress">
+                <div class="progress-bar" role="progressbar" style="width: {{ (project.actual_duration / project.estimated_duration * 100) if project.estimated_duration and project.actual_duration else 0 }}%">
+                  {{ (project.actual_duration / project.estimated_duration * 100) if project.estimated_duration and project.actual_duration else 0 }}%
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            {{ form.description.label(class="form-label") }}
+            {{ form.description(class="form-control", rows="3") }}
+            {% if form.description.errors %}
+              <div class="text-danger">
+                {% for error in form.description.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          
+          <div class="mb-3">
+            {{ form.security_requirements.label(class="form-label") }}
+            {{ form.security_requirements(class="form-control", rows="4") }}
+            {% if form.security_requirements.errors %}
+              <div class="text-danger">
+                {% for error in form.security_requirements.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          
+          <div class="mb-3">
+            {{ form.vulnerabilities_found.label(class="form-label") }}
+            {{ form.vulnerabilities_found(class="form-control", rows="4") }}
+            {% if form.vulnerabilities_found.errors %}
+              <div class="text-danger">
+                {% for error in form.vulnerabilities_found.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          
+          <div class="mb-3">
+            {{ form.remediation_plan.label(class="form-label") }}
+            {{ form.remediation_plan(class="form-control", rows="4") }}
+            {% if form.remediation_plan.errors %}
+              <div class="text-danger">
+                {% for error in form.remediation_plan.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> ذخیره تغییرات
+            </button>
+            <a href="{{ url_for('security_projects') }}" class="btn btn-secondary">
+              <i class="fas fa-arrow-right"></i> بازگشت
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+    
+    <!-- آمار پروژه -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="fas fa-chart-bar"></i> آمار پروژه</h6>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-3">
+            <div class="text-center">
+              <h5 class="text-primary">{{ project.created_at.strftime('%Y/%m/%d') }}</h5>
+              <small class="text-muted">تاریخ ایجاد</small>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-center">
+              <h5 class="text-info">{{ project.updated_at.strftime('%Y/%m/%d') }}</h5>
+              <small class="text-muted">آخرین بروزرسانی</small>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-center">
+              <h5 class="text-success">{{ project.estimated_duration or 0 }}</h5>
+              <small class="text-muted">مدت تخمینی (روز)</small>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-center">
+              <h5 class="text-warning">{{ project.actual_duration or 0 }}</h5>
+              <small class="text-muted">مدت واقعی (روز)</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// محاسبه خودکار مدت زمان واقعی
+document.querySelector('input[name="start_date"]').addEventListener('change', calculateDuration);
+document.querySelector('input[name="completion_date"]').addEventListener('change', calculateDuration);
+
+function calculateDuration() {
+  const startDate = document.querySelector('input[name="start_date"]').value;
+  const completionDate = document.querySelector('input[name="completion_date"]').value;
+  
+  if (startDate && completionDate) {
+    const start = new Date(startDate);
+    const end = new Date(completionDate);
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    document.querySelector('input[readonly]').value = diffDays;
+  }
+}
+
+// بروزرسانی درصد پیشرفت
+document.querySelector('input[name="estimated_duration"]').addEventListener('input', updateProgress);
+document.querySelector('input[readonly]').addEventListener('input', updateProgress);
+
+function updateProgress() {
+  const estimated = parseInt(document.querySelector('input[name="estimated_duration"]').value) || 0;
+  const actual = parseInt(document.querySelector('input[readonly]').value) || 0;
+  
+  if (estimated > 0) {
+    const percentage = Math.min((actual / estimated) * 100, 100);
+    const progressBar = document.querySelector('.progress-bar');
+    progressBar.style.width = percentage + '%';
+    progressBar.textContent = Math.round(percentage) + '%';
+  }
+}
+</script>
+{% endblock %}
+

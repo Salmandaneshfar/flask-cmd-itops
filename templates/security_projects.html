@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+{% block page_title %}مدیریت پروژه‌های امنیتی{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5><i class="fas fa-shield-alt"></i> مدیریت پروژه‌های امنیتی</h5>
+  <a href="{{ url_for('add_security_project') }}" class="btn btn-primary">
+    <i class="fas fa-plus"></i> پروژه جدید
+  </a>
+</div>
+
+<!-- فیلتر و جستجو -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-3">
+        <select class="form-select" id="statusFilter">
+          <option value="">همه وضعیت‌ها</option>
+          <option value="pending">در انتظار</option>
+          <option value="in_progress">در حال انجام</option>
+          <option value="completed">تکمیل شده</option>
+          <option value="failed">ناموفق</option>
+          <option value="unknown">نامشخص</option>
+          <option value="on_hold">متوقف شده</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select class="form-select" id="typeFilter">
+          <option value="">همه انواع</option>
+          <option value="network">شبکه</option>
+          <option value="os">سیستم عامل</option>
+          <option value="application">اپلیکیشن</option>
+          <option value="database">دیتابیس</option>
+          <option value="cloud">ابر</option>
+          <option value="mobile">موبایل</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select class="form-select" id="environmentFilter">
+          <option value="">همه محیط‌ها</option>
+          <option value="test">تست</option>
+          <option value="production">پروداکشن</option>
+          <option value="staging">استیجینگ</option>
+          <option value="development">توسعه</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <input type="text" class="form-control" id="searchField" placeholder="جستجو در پروژه‌ها...">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    {% if projects.items %}
+      <div class="table-responsive">
+        <table class="table table-hover" id="projectsTable">
+          <thead>
+            <tr>
+              <th>نام پروژه</th>
+              <th>پیمانکار</th>
+              <th>نوع</th>
+              <th>محیط</th>
+              <th>وضعیت</th>
+              <th>اولویت</th>
+              <th>واگذار شده به</th>
+              <th>تاریخ شروع</th>
+              <th>عملیات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for project in projects.items %}
+              <tr data-status="{{ project.security_status }}" data-type="{{ project.project_type }}" data-environment="{{ project.environment }}">
+                <td>
+                  <h6 class="mb-1">{{ project.project_name }}</h6>
+                  {% if project.description %}
+                    <small class="text-muted">{{ project.description[:50] }}{% if project.description|length > 50 %}...{% endif %}</small>
+                  {% endif %}
+                </td>
+                <td>
+                  <span class="badge bg-info">{{ project.contractor }}</span>
+                </td>
+                <td>
+                  <span class="badge bg-{{ 'primary' if project.project_type == 'network' else 'success' if project.project_type == 'os' else 'warning' if project.project_type == 'application' else 'info' if project.project_type == 'database' else 'secondary' if project.project_type == 'cloud' else 'dark' }}">
+                    {{ project.project_type }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge bg-{{ 'success' if project.environment == 'production' else 'warning' if project.environment == 'test' else 'info' if project.environment == 'staging' else 'secondary' }}">
+                    {{ project.environment }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge bg-{{ 'success' if project.security_status == 'completed' else 'warning' if project.security_status == 'in_progress' else 'danger' if project.security_status == 'failed' else 'secondary' if project.security_status == 'unknown' else 'info' if project.security_status == 'on_hold' else 'primary' }}">
+                    {{ project.security_status }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge bg-{{ 'danger' if project.priority == 'critical' else 'warning' if project.priority == 'high' else 'info' if project.priority == 'medium' else 'secondary' }}">
+                    {{ project.priority }}
+                  </span>
+                </td>
+                <td>
+                  {% if project.assigned_user %}
+                    <div class="d-flex align-items-center">
+                      <div class="user-avatar me-2" style="width: 25px; height: 25px; font-size: 10px;">
+                        {{ project.assigned_user.username[0].upper() }}
+                      </div>
+                      {{ project.assigned_user.username }}
+                    </div>
+                  {% else %}
+                    <span class="text-muted">واگذار نشده</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if project.start_date %}
+                    {{ project.start_date.strftime('%Y/%m/%d') }}
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <div class="btn-group" role="group">
+                    <a href="{{ url_for('edit_security_project', id=project.id) }}" class="btn btn-sm btn-outline-primary" title="ویرایش">
+                      <i class="fas fa-edit"></i>
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteProject({{ project.id }})" title="حذف">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- Pagination -->
+      {% if projects.pages > 1 %}
+        <nav aria-label="صفحه‌بندی">
+          <ul class="pagination justify-content-center">
+            {% if projects.has_prev %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('security_projects', page=projects.prev_num) }}">قبلی</a>
+              </li>
+            {% endif %}
+            
+            {% for page_num in projects.iter_pages() %}
+              {% if page_num %}
+                {% if page_num != projects.page %}
+                  <li class="page-item">
+                    <a class="page-link" href="{{ url_for('security_projects', page=page_num) }}">{{ page_num }}</a>
+                  </li>
+                {% else %}
+                  <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                  </li>
+                {% endif %}
+              {% else %}
+                <li class="page-item disabled">
+                  <span class="page-link">...</span>
+                </li>
+              {% endif %}
+            {% endfor %}
+            
+            {% if projects.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('security_projects', page=projects.next_num) }}">بعدی</a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      {% endif %}
+    {% else %}
+      <div class="text-center py-5">
+        <i class="fas fa-shield-alt fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">هیچ پروژه امنیتی یافت نشد</h5>
+        <p class="text-muted">برای شروع، اولین پروژه امنیتی را اضافه کنید</p>
+        <a href="{{ url_for('add_security_project') }}" class="btn btn-primary mt-3">
+          <i class="fas fa-plus"></i> پروژه جدید اضافه کنید
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// فیلتر جدول
+document.getElementById('statusFilter').addEventListener('change', filterTable);
+document.getElementById('typeFilter').addEventListener('change', filterTable);
+document.getElementById('environmentFilter').addEventListener('change', filterTable);
+document.getElementById('searchField').addEventListener('input', filterTable);
+
+function filterTable() {
+  const statusFilter = document.getElementById('statusFilter').value;
+  const typeFilter = document.getElementById('typeFilter').value;
+  const environmentFilter = document.getElementById('environmentFilter').value;
+  const searchTerm = document.getElementById('searchField').value.toLowerCase();
+  
+  const rows = document.querySelectorAll('#projectsTable tbody tr');
+  
+  rows.forEach(row => {
+    const status = row.getAttribute('data-status');
+    const type = row.getAttribute('data-type');
+    const environment = row.getAttribute('data-environment');
+    const text = row.textContent.toLowerCase();
+    
+    const statusMatch = !statusFilter || status === statusFilter;
+    const typeMatch = !typeFilter || type === typeFilter;
+    const environmentMatch = !environmentFilter || environment === environmentFilter;
+    const searchMatch = !searchTerm || text.includes(searchTerm);
+    
+    if (statusMatch && typeMatch && environmentMatch && searchMatch) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+}
+
+// حذف پروژه
+function deleteProject(projectId) {
+  if (confirm('آیا مطمئن هستید که می‌خواهید این پروژه را حذف کنید؟')) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/security-projects/delete/${projectId}`;
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+
+// انیمیشن ورود ردیف‌ها
+document.addEventListener('DOMContentLoaded', function() {
+  const rows = document.querySelectorAll('#projectsTable tbody tr');
+  rows.forEach((row, index) => {
+    row.style.opacity = '0';
+    row.style.transform = 'translateY(20px)';
+    
+    setTimeout(() => {
+      row.style.transition = 'all 0.3s ease';
+      row.style.opacity = '1';
+      row.style.transform = 'translateY(0)';
+    }, index * 50);
+  });
+});
+</script>
+{% endblock %}
+

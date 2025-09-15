@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block page_title %}اضافه کردن سرور{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-server"></i> اضافه کردن سرور جدید</h5>
+      </div>
+      <div class="card-body">
+        <form method="POST">
+          {{ form.hidden_tag() }}
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              {{ form.name.label(class="form-label") }}
+              {{ form.name(class="form-control") }}
+              {% if form.name.errors %}
+                <div class="text-danger">
+                  {% for error in form.name.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              {{ form.ip_address.label(class="form-label") }}
+              {{ form.ip_address(class="form-control") }}
+              {% if form.ip_address.errors %}
+                <div class="text-danger">
+                  {% for error in form.ip_address.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              {{ form.os_type.label(class="form-label") }}
+              {{ form.os_type(class="form-select") }}
+              {% if form.os_type.errors %}
+                <div class="text-danger">
+                  {% for error in form.os_type.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              {{ form.status.label(class="form-label") }}
+              {{ form.status(class="form-select") }}
+              {% if form.status.errors %}
+                <div class="text-danger">
+                  {% for error in form.status.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            {{ form.description.label(class="form-label") }}
+            {{ form.description(class="form-control", rows="4") }}
+            {% if form.description.errors %}
+              <div class="text-danger">
+                {% for error in form.description.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          
+          <!-- فیلدهای داینامیک -->
+          <div id="dynamicFieldsContainer"></div>
+          
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> ذخیره
+            </button>
+            <a href="{{ url_for('servers') }}" class="btn btn-secondary">
+              <i class="fas fa-arrow-right"></i> بازگشت
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dynamic-fields.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  initDynamicFields('Server', 'dynamicFieldsContainer');
+});
+</script>
+{% endblock %}

@@ -1,0 +1,48 @@
+# Override file for development
+# This file is automatically loaded by docker-compose
+
+version: '3.8'
+
+services:
+  web:
+    # Override for development
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    volumes:
+      # Mount source code for hot reload
+      - .:/app
+      - /app/__pycache__
+    ports:
+      # Expose Flask port directly for development
+      - "5000:5000"
+    command: ["python", "app.py"]
+
+  db:
+    # Override for development
+    environment:
+      - POSTGRES_DB=cms_db
+      - POSTGRES_USER=cms_user
+      - POSTGRES_PASSWORD=cms_password
+    ports:
+      # Expose PostgreSQL port for external access
+      - "5432:5432"
+
+  redis:
+    # Override for development
+    command: redis-server --appendonly yes
+    ports:
+      # Expose Redis port for external access
+      - "6379:6379"
+
+  nginx:
+    # Disable nginx in development
+    profiles:
+      - nginx
+
+
+
+
+
+
+

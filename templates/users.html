@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+{% block page_title %}مدیریت کاربران{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5><i class="fas fa-users"></i> مدیریت کاربران</h5>
+  {% if current_user.role == 'admin' %}
+    <a href="{{ url_for('add_user') }}" class="btn btn-primary">
+      <i class="fas fa-plus"></i> کاربر جدید
+    </a>
+  {% endif %}
+</div>
+
+<!-- فیلتر و جستجو -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="GET" class="row g-3">
+      <div class="col-md-4">
+        <input type="text" name="query" class="form-control" placeholder="جستجو در نام کاربری یا ایمیل..." value="{{ request.args.get('query', '') }}">
+      </div>
+      <div class="col-md-3">
+        <select name="role" class="form-select">
+          <option value="">همه نقش‌ها</option>
+          <option value="admin" {% if request.args.get('role') == 'admin' %}selected{% endif %}>مدیر</option>
+          <option value="editor" {% if request.args.get('role') == 'editor' %}selected{% endif %}>ویرایشگر</option>
+          <option value="user" {% if request.args.get('role') == 'user' %}selected{% endif %}>کاربر</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select name="status" class="form-select">
+          <option value="">همه وضعیت‌ها</option>
+          <option value="active" {% if request.args.get('status') == 'active' %}selected{% endif %}>فعال</option>
+          <option value="inactive" {% if request.args.get('status') == 'inactive' %}selected{% endif %}>غیرفعال</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-outline-primary w-100">
+          <i class="fas fa-search"></i> جستجو
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    {% if users.items %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>نام کاربری</th>
+              <th>ایمیل</th>
+              <th>نقش</th>
+              <th>وضعیت</th>
+              <th>تاریخ عضویت</th>
+              {% if custom_fields_structure %}
+                {% for field_name, field_data in custom_fields_structure %}
+                  <th>{{ field_data.label }}</th>
+                {% endfor %}
+              {% endif %}
+              <th>عملیات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for user in users.items %}
+              <tr>
+                <td>
+                  <div class="d-flex align-items-center">
+                    <div class="user-avatar me-2" style="width: 30px; height: 30px; font-size: 12px;">
+                      {{ user.username[0].upper() }}
+                    </div>
+                    {{ user.username }}
+                  </div>
+                </td>
+                <td>{{ user.email }}</td>
+                <td>
+                  <span class="badge bg-{{ 'danger' if user.role == 'admin' else 'warning' if user.role == 'editor' else 'info' }}">
+                    {{ user.role }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge bg-{{ 'success' if user.is_active else 'secondary' }}">
+                    {{ 'فعال' if user.is_active else 'غیرفعال' }}
+                  </span>
+                </td>
+                <td>{{ user.created_at.strftime('%Y/%m/%d') }}</td>
+                {% if custom_fields_data and custom_fields_data[user.id] %}
+                  {% for field_name, field_data in custom_fields_data[user.id].items() %}
+                    <td>
+                      {% if field_data.value %}
+                        {% if field_data.field_type == 'checkbox' %}
+                          <span class="badge bg-{{ 'success' if field_data.value == '1' else 'secondary' }}">
+                            {{ 'بله' if field_data.value == '1' else 'خیر' }}
+                          </span>
+                        {% elif field_data.field_type == 'date' %}
+                          {{ field_data.value }}
+                        {% elif field_data.field_type == 'url' %}
+                          <a href="{{ field_data.value }}" target="_blank" class="text-decoration-none">
+                            <i class="fas fa-external-link-alt"></i> لینک
+                          </a>
+                        {% elif field_data.field_type == 'email' %}
+                          <a href="mailto:{{ field_data.value }}" class="text-decoration-none">
+                            {{ field_data.value }}
+                          </a>
+                        {% else %}
+                          {{ field_data.value }}
+                        {% endif %}
+                      {% else %}
+                        <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                  {% endfor %}
+                {% endif %}
+                <td>
+                  {% if current_user.role == 'admin' %}
+                    <div class="btn-group" role="group">
+                      <a href="{{ url_for('edit_user', id=user.id) }}" class="btn btn-sm btn-outline-primary" title="ویرایش">
+                        <i class="fas fa-edit"></i>
+                      </a>
+                      {% if user.id != current_user.id %}
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteUser({{ user.id }})" title="حذف">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- Pagination -->
+      {% if users.pages > 1 %}
+        <nav aria-label="صفحه‌بندی">
+          <ul class="pagination justify-content-center">
+            {% if users.has_prev %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('users', page=users.prev_num) }}">قبلی</a>
+              </li>
+            {% endif %}
+            
+            {% for page_num in users.iter_pages() %}
+              {% if page_num %}
+                {% if page_num != users.page %}
+                  <li class="page-item">
+                    <a class="page-link" href="{{ url_for('users', page=page_num) }}">{{ page_num }}</a>
+                  </li>
+                {% else %}
+                  <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                  </li>
+                {% endif %}
+              {% else %}
+                <li class="page-item disabled">
+                  <span class="page-link">...</span>
+                </li>
+              {% endif %}
+            {% endfor %}
+            
+            {% if users.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('users', page=users.next_num) }}">بعدی</a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      {% endif %}
+    {% else %}
+      <div class="text-center py-5">
+        <i class="fas fa-users fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">هیچ کاربری یافت نشد</h5>
+        {% if current_user.role == 'admin' %}
+          <a href="{{ url_for('add_user') }}" class="btn btn-primary mt-3">
+            <i class="fas fa-plus"></i> اولین کاربر را اضافه کنید
+          </a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deleteUser(userId) {
+  if (confirm('آیا مطمئن هستید که می‌خواهید این کاربر را حذف کنید؟')) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/users/delete/${userId}`;
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+</script>
+{% endblock %}

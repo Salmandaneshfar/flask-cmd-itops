@@ -1,80 +1,1380 @@
-from flask import Flask, render_template, request, redirect, url_for
-from flask_sqlalchemy import SQLAlchemy
-from cryptography.fernet import Fernet
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, abort
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
+from flask_caching import Cache
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_wtf.csrf import CSRFProtect
+from werkzeug.utils import secure_filename
+from datetime import datetime
+import os
+import sqlite3
+import redis
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///cms.db'
-db = SQLAlchemy(app)
+from config import config
+from sqlalchemy import or_, text
+from models import db, User, Server, Task, Content, Backup, CustomField, CustomFieldValue, SecurityProject, Notification, Credential
+from forms import (LoginForm, UserForm, EditUserForm, ChangePasswordForm, 
+                  ServerForm, TaskForm, ContentForm, BackupForm, SearchForm,
+                  CustomFieldForm, CustomFieldEditForm, SecurityProjectForm, SecurityProjectEditForm,
+                  CredentialForm, CredentialEditForm, CredentialSearchForm)
+from logging_config import setup_logging, security_logger
 
-# رمزنگاری
-key = Fernet.generate_key()
-cipher = Fernet(key)
-
-# مدل رمزها
-class Credential(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    app_name = db.Column(db.String(100))
-    username = db.Column(db.String(100))
-    password_encrypted = db.Column(db.String(200))
-
-    def set_password(self, raw_password):
-        self.password_encrypted = cipher.encrypt(raw_password.encode()).decode()
-
-    def get_password(self):
-        return cipher.decrypt(self.password_encrypted.encode()).decode()
-
-# مدل سرورها
-class Server(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    ip_address = db.Column(db.String(50), nullable=False)
-    os_type = db.Column(db.String(50), nullable=False)
-    status = db.Column(db.String(20), nullable=False)
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/credentials', methods=['GET', 'POST'])
-def credentials():
-    if request.method == 'POST':
-        app_name = request.form['app_name']
-        username = request.form['username']
-        password = request.form['password']
-        cred = Credential(app_name=app_name, username=username)
-        cred.set_password(password)
-        db.session.add(cred)
+def create_app(config_name='default'):
+    app = Flask(__name__)
+    app.config.from_object(config[config_name])
+    
+    # Initialize extensions
+    db.init_app(app)
+    
+    # Initialize CSRF Protection
+    csrf = CSRFProtect(app)
+    
+    # Initialize Cache
+    cache = Cache(app)
+    
+    # Initialize Rate Limiter
+    limiter = Limiter(
+        key_func=get_remote_address,
+        default_limits=["200 per day", "50 per hour"]
+    )
+    limiter.init_app(app)
+    
+    # Initialize Flask-Login
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'login'
+    login_manager.login_message = 'لطفاً ابتدا وارد شوید.'
+    login_manager.login_message_category = 'info'
+    
+    # Setup logging
+    setup_logging(app)
+    
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(int(user_id))
+    
+    # Ensure required directories exist
+    os.makedirs('instance', exist_ok=True)
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    
+    # Health check endpoint
+    @app.route('/health')
+    def health_check():
+        """Health check endpoint for load balancer"""
+        try:
+            # Check database connection
+            db.session.execute(text('SELECT 1'))
+            db_status = 'healthy'
+        except Exception as e:
+            db_status = f'unhealthy: {str(e)}'
+        
+        try:
+            # Check Redis connection
+            redis_client = redis.from_url(app.config['REDIS_URL'])
+            redis_client.ping()
+            redis_status = 'healthy'
+        except Exception as e:
+            redis_status = f'unhealthy: {str(e)}'
+        
+        return jsonify({
+            'status': 'healthy' if db_status == 'healthy' and redis_status == 'healthy' else 'unhealthy',
+            'database': db_status,
+            'redis': redis_status,
+            'timestamp': datetime.utcnow().isoformat()
+        }), 200 if db_status == 'healthy' and redis_status == 'healthy' else 503
+    
+    # Authentication routes
+    @app.route('/login', methods=['GET', 'POST'])
+    @limiter.limit("10 per minute")
+    def login():
+        if current_user.is_authenticated:
+            return redirect(url_for('dashboard'))
+        
+        form = LoginForm()
+        if form.validate_on_submit():
+            user = User.query.filter_by(username=form.username.data).first()
+            if user and user.check_password(form.password.data) and user.is_active:
+                login_user(user, remember=form.remember_me.data)
+                user.last_login = datetime.utcnow()
+                db.session.commit()
+                
+                # Log successful login
+                security_logger.log_login_attempt(
+                    username=form.username.data,
+                    ip=request.remote_addr,
+                    success=True
+                )
+                
+                next_page = request.args.get('next')
+                return redirect(next_page) if next_page else redirect(url_for('dashboard'))
+            else:
+                # Log failed login attempt
+                security_logger.log_login_attempt(
+                    username=form.username.data,
+                    ip=request.remote_addr,
+                    success=False
+                )
+                flash('نام کاربری یا رمز عبور اشتباه است.', 'error')
+        
+        return render_template('login.html', form=form)
+    
+    @app.route('/logout')
+    @login_required
+    def logout():
+        logout_user()
+        return redirect(url_for('login'))
+    
+    # Main routes
+    @app.route('/')
+    @app.route('/dashboard')
+    @login_required
+    def dashboard():
+        # Get statistics
+        stats = {
+            'users_count': User.query.count(),
+            'servers_count': Server.query.count(),
+            'tasks_count': Task.query.count(),
+            'content_count': Content.query.count(),
+            'active_tasks': Task.query.filter_by(status='in_progress').count(),
+            'published_content': Content.query.filter_by(status='published').count()
+        }
+        
+        # Recent activities
+        recent_tasks = Task.query.order_by(Task.created_at.desc()).limit(5).all()
+        recent_content = Content.query.order_by(Content.created_at.desc()).limit(5).all()
+        
+        return render_template('dashboard.html', stats=stats, recent_tasks=recent_tasks, recent_content=recent_content)
+    
+    # User management routes
+    @app.route('/users')
+    @login_required
+    def users():
+        page = request.args.get('page', 1, type=int)
+        query = request.args.get('query', '')
+        role = request.args.get('role', '')
+        status = request.args.get('status', '')
+        
+        # ساخت کوئری پایه
+        users_query = User.query
+        
+        # اعمال فیلترها
+        if query:
+            users_query = users_query.filter(
+                User.username.contains(query) | 
+                User.email.contains(query)
+            )
+        
+        if role:
+            users_query = users_query.filter_by(role=role)
+        
+        if status:
+            if status == 'active':
+                users_query = users_query.filter_by(is_active=True)
+            elif status == 'inactive':
+                users_query = users_query.filter_by(is_active=False)
+        
+        users = users_query.paginate(page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
+        
+        # دریافت فیلدهای سفارشی برای کاربران
+        custom_fields_data = get_custom_fields_for_records(users.items, 'User')
+        custom_fields_structure = get_custom_fields_structure(custom_fields_data)
+        
+        return render_template('users.html', users=users, custom_fields_data=custom_fields_data, custom_fields_structure=custom_fields_structure)
+    
+    @app.route('/users/add', methods=['GET', 'POST'])
+    @login_required
+    def add_user():
+        if current_user.role != 'admin':
+            flash('شما دسترسی لازم را ندارید.', 'error')
+            return redirect(url_for('users'))
+        
+        form = UserForm()
+        if form.validate_on_submit():
+            user = User(
+                username=form.username.data,
+                email=form.email.data,
+                role=form.role.data,
+                is_active=form.is_active.data
+            )
+            user.set_password(form.password.data)
+            db.session.add(user)
+            db.session.flush()  # برای گرفتن ID
+            
+            # پردازش فیلدهای سفارشی
+            for key, value in request.form.items():
+                if key.startswith('custom_field_'):
+                    field_id = key.replace('custom_field_', '')
+                    try:
+                        field_value = CustomFieldValue(
+                            field_id=int(field_id),
+                            model_name='User',
+                            record_id=user.id,
+                            value=value
+                        )
+                        db.session.add(field_value)
+                    except ValueError:
+                        continue
+            
+            db.session.commit()
+            flash('کاربر با موفقیت اضافه شد.', 'success')
+            return redirect(url_for('users'))
+        
+        return render_template('add_user.html', form=form)
+    
+    @app.route('/users/edit/<int:id>', methods=['GET', 'POST'])
+    @login_required
+    def edit_user(id):
+        if current_user.role != 'admin':
+            flash('شما دسترسی لازم را ندارید.', 'error')
+            return redirect(url_for('users'))
+        
+        user = User.query.get_or_404(id)
+        form = EditUserForm(obj=user)
+        
+        if form.validate_on_submit():
+            user.username = form.username.data
+            user.email = form.email.data
+            user.role = form.role.data
+            user.is_active = form.is_active.data
+            
+            # پردازش فیلدهای سفارشی
+            for key, value in request.form.items():
+                if key.startswith('custom_field_'):
+                    field_id = key.replace('custom_field_', '')
+                    try:
+                        # پیدا کردن یا ایجاد مقدار فیلد
+                        field_value = CustomFieldValue.query.filter_by(
+                            field_id=int(field_id),
+                            model_name='User',
+                            record_id=user.id
+                        ).first()
+                        
+                        if field_value:
+                            field_value.value = value
+                        else:
+                            field_value = CustomFieldValue(
+                                field_id=int(field_id),
+                                model_name='User',
+                                record_id=user.id,
+                                value=value
+                            )
+                            db.session.add(field_value)
+                    except ValueError:
+                        continue
+            
+            db.session.commit()
+            flash('کاربر با موفقیت ویرایش شد.', 'success')
+            return redirect(url_for('users'))
+        
+        return render_template('edit_user.html', form=form, user=user)
+    
+    @app.route('/users/delete/<int:id>', methods=['POST'])
+    @login_required
+    def delete_user(id):
+        if current_user.role != 'admin':
+            flash('شما دسترسی لازم را ندارید.', 'error')
+            return redirect(url_for('users'))
+        
+        user = User.query.get_or_404(id)
+        
+        # جلوگیری از حذف خود کاربر
+        if user.id == current_user.id:
+            flash('نمی‌توانید خودتان را حذف کنید.', 'error')
+            return redirect(url_for('users'))
+        
+        db.session.delete(user)
         db.session.commit()
+        flash('کاربر با موفقیت حذف شد.', 'success')
+        return redirect(url_for('users'))
+    
+    # Server management routes
+    @app.route('/servers')
+    @login_required
+    def servers():
+        page = request.args.get('page', 1, type=int)
+        query = request.args.get('query', '')
+        os_type = request.args.get('os_type', '')
+        status = request.args.get('status', '')
+        
+        # ساخت کوئری پایه
+        servers_query = Server.query
+        
+        # اعمال فیلترها
+        if query:
+            servers_query = servers_query.filter(
+                Server.name.contains(query) | 
+                Server.description.contains(query)
+            )
+        
+        if os_type:
+            servers_query = servers_query.filter_by(os_type=os_type)
+        
+        if status:
+            servers_query = servers_query.filter_by(status=status)
+        
+        servers = servers_query.paginate(page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
+        
+        # دریافت فیلدهای سفارشی برای سرورها
+        custom_fields_data = get_custom_fields_for_records(servers.items, 'Server')
+        custom_fields_structure = get_custom_fields_structure(custom_fields_data)
+        
+        return render_template('servers.html', servers=servers, custom_fields_data=custom_fields_data, custom_fields_structure=custom_fields_structure)
+    
+    @app.route('/servers/add', methods=['GET', 'POST'])
+    @login_required
+    def add_server():
+        form = ServerForm()
+        if form.validate_on_submit():
+            server = Server(
+                name=form.name.data,
+                ip_address=form.ip_address.data,
+                os_type=form.os_type.data,
+                status=form.status.data,
+                description=form.description.data
+            )
+            db.session.add(server)
+            db.session.flush()  # برای گرفتن ID
+            
+            # پردازش فیلدهای سفارشی
+            for key, value in request.form.items():
+                if key.startswith('custom_field_'):
+                    field_id = key.replace('custom_field_', '')
+                    try:
+                        field_value = CustomFieldValue(
+                            field_id=int(field_id),
+                            model_name='Server',
+                            record_id=server.id,
+                            value=value
+                        )
+                        db.session.add(field_value)
+                    except ValueError:
+                        continue
+            
+            db.session.commit()
+            flash('سرور با موفقیت اضافه شد.', 'success')
+            return redirect(url_for('servers'))
+        
+        return render_template('add_server.html', form=form)
+    
+    @app.route('/servers/edit/<int:id>', methods=['GET', 'POST'])
+    @login_required
+    def edit_server(id):
+        server = Server.query.get_or_404(id)
+        form = ServerForm(obj=server)
+        
+        if form.validate_on_submit():
+            server.name = form.name.data
+            server.ip_address = form.ip_address.data
+            server.os_type = form.os_type.data
+            server.status = form.status.data
+            server.description = form.description.data
+            server.updated_at = datetime.utcnow()
+            
+            # پردازش فیلدهای سفارشی
+            for key, value in request.form.items():
+                if key.startswith('custom_field_'):
+                    field_id = key.replace('custom_field_', '')
+                    try:
+                        # پیدا کردن یا ایجاد مقدار فیلد
+                        field_value = CustomFieldValue.query.filter_by(
+                            field_id=int(field_id),
+                            model_name='Server',
+                            record_id=server.id
+                        ).first()
+                        
+                        if field_value:
+                            field_value.value = value
+                        else:
+                            field_value = CustomFieldValue(
+                                field_id=int(field_id),
+                                model_name='Server',
+                                record_id=server.id,
+                                value=value
+                            )
+                            db.session.add(field_value)
+                    except ValueError:
+                        continue
+            
+            db.session.commit()
+            flash('سرور با موفقیت ویرایش شد.', 'success')
+            return redirect(url_for('servers'))
+        
+        return render_template('edit_server.html', form=form, server=server)
+    
+    @app.route('/servers/delete/<int:id>', methods=['POST'])
+    @login_required
+    def delete_server(id):
+        server = Server.query.get_or_404(id)
+        db.session.delete(server)
+        db.session.commit()
+        flash('سرور با موفقیت حذف شد.', 'success')
+        return redirect(url_for('servers'))
+    
+    # Task management routes
+    @app.route('/tasks')
+    @login_required
+    def tasks():
+        page = request.args.get('page', 1, type=int)
+        query = request.args.get('query', '')
+        priority = request.args.get('priority', '')
+        status = request.args.get('status', '')
+        assigned_to = request.args.get('assigned_to', '')
+        
+        # ساخت کوئری پایه
+        tasks_query = Task.query
+        
+        # اعمال فیلترها
+        if query:
+            tasks_query = tasks_query.filter(
+                Task.title.contains(query) | 
+                Task.description.contains(query)
+            )
+        
+        if priority:
+            tasks_query = tasks_query.filter_by(priority=priority)
+        
+        if status:
+            tasks_query = tasks_query.filter_by(status=status)
+        
+        if assigned_to:
+            tasks_query = tasks_query.filter_by(assigned_to=assigned_to)
+        
+        tasks = tasks_query.paginate(page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
+        
+        # دریافت فیلدهای سفارشی برای تسک‌ها
+        custom_fields_data = get_custom_fields_for_records(tasks.items, 'Task')
+        custom_fields_structure = get_custom_fields_structure(custom_fields_data)
+        
+        return render_template('tasks.html', tasks=tasks, User=User, custom_fields_data=custom_fields_data, custom_fields_structure=custom_fields_structure)
+    
+    @app.route('/tasks/add', methods=['GET', 'POST'])
+    @login_required
+    def add_task():
+        form = TaskForm()
+        form.assigned_to.choices = [(u.id, u.username) for u in User.query.filter_by(is_active=True).all()]
+        
+        if form.validate_on_submit():
+            task = Task(
+                title=form.title.data,
+                description=form.description.data,
+                priority=form.priority.data,
+                assigned_to=form.assigned_to.data,
+                created_by=current_user.id,
+                due_date=form.due_date.data
+            )
+            db.session.add(task)
+            db.session.flush()  # برای گرفتن ID
+            
+            # پردازش فیلدهای سفارشی
+            for key, value in request.form.items():
+                if key.startswith('custom_field_'):
+                    field_id = key.replace('custom_field_', '')
+                    try:
+                        field_value = CustomFieldValue(
+                            field_id=int(field_id),
+                            model_name='Task',
+                            record_id=task.id,
+                            value=value
+                        )
+                        db.session.add(field_value)
+                    except ValueError:
+                        continue
+            
+            db.session.commit()
+            flash('تسک با موفقیت اضافه شد.', 'success')
+            return redirect(url_for('tasks'))
+        
+        return render_template('add_task.html', form=form)
+    
+    @app.route('/tasks/edit/<int:id>', methods=['GET', 'POST'])
+    @login_required
+    def edit_task(id):
+        task = Task.query.get_or_404(id)
+        form = TaskForm(obj=task)
+        form.assigned_to.choices = [(u.id, u.username) for u in User.query.filter_by(is_active=True).all()]
+        
+        if form.validate_on_submit():
+            task.title = form.title.data
+            task.description = form.description.data
+            task.priority = form.priority.data
+            task.assigned_to = form.assigned_to.data
+            task.due_date = form.due_date.data
+            task.updated_at = datetime.utcnow()
+            
+            # پردازش فیلدهای سفارشی
+            for key, value in request.form.items():
+                if key.startswith('custom_field_'):
+                    field_id = key.replace('custom_field_', '')
+                    try:
+                        # پیدا کردن یا ایجاد مقدار فیلد
+                        field_value = CustomFieldValue.query.filter_by(
+                            field_id=int(field_id),
+                            model_name='Task',
+                            record_id=task.id
+                        ).first()
+                        
+                        if field_value:
+                            field_value.value = value
+                        else:
+                            field_value = CustomFieldValue(
+                                field_id=int(field_id),
+                                model_name='Task',
+                                record_id=task.id,
+                                value=value
+                            )
+                            db.session.add(field_value)
+                    except ValueError:
+                        continue
+            
+            db.session.commit()
+            flash('تسک با موفقیت ویرایش شد.', 'success')
+            return redirect(url_for('tasks'))
+        
+        return render_template('edit_task.html', form=form, task=task)
+    
+    @app.route('/tasks/delete/<int:id>', methods=['POST'])
+    @login_required
+    def delete_task(id):
+        task = Task.query.get_or_404(id)
+        db.session.delete(task)
+        db.session.commit()
+        flash('تسک با موفقیت حذف شد.', 'success')
+        return redirect(url_for('tasks'))
+    
+    # Security Projects management routes
+    @app.route('/security-projects')
+    @login_required
+    def security_projects():
+        page = request.args.get('page', 1, type=int)
+        query = request.args.get('query', '')
+        project_type = request.args.get('project_type', '')
+        environment = request.args.get('environment', '')
+        security_status = request.args.get('security_status', '')
+        
+        # ساخت کوئری پایه
+        projects_query = SecurityProject.query
+        
+        # اعمال فیلترها
+        if query:
+            projects_query = projects_query.filter(
+                SecurityProject.project_name.contains(query) | 
+                SecurityProject.description.contains(query)
+            )
+        
+        if project_type:
+            projects_query = projects_query.filter_by(project_type=project_type)
+        
+        if environment:
+            projects_query = projects_query.filter_by(environment=environment)
+        
+        if security_status:
+            projects_query = projects_query.filter_by(security_status=security_status)
+        
+        projects = projects_query.paginate(page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
+        return render_template('security_projects.html', projects=projects)
+    
+    @app.route('/security-projects/add', methods=['GET', 'POST'])
+    @login_required
+    def add_security_project():
+        form = SecurityProjectForm()
+        form.assigned_to.choices = [(u.id, u.username) for u in User.query.filter_by(is_active=True).all()]
+        
+        if form.validate_on_submit():
+            project = SecurityProject(
+                project_name=form.project_name.data,
+                contractor=form.contractor.data,
+                project_type=form.project_type.data,
+                environment=form.environment.data,
+                security_status=form.security_status.data,
+                priority=form.priority.data,
+                description=form.description.data,
+                security_requirements=form.security_requirements.data,
+                vulnerabilities_found=form.vulnerabilities_found.data,
+                remediation_plan=form.remediation_plan.data,
+                assigned_to=form.assigned_to.data,
+                created_by=current_user.id,
+                start_date=form.start_date.data,
+                estimated_duration=int(form.estimated_duration.data) if form.estimated_duration.data else None
+            )
+            db.session.add(project)
+            db.session.commit()
+            flash('پروژه امنیتی با موفقیت اضافه شد.', 'success')
+            return redirect(url_for('security_projects'))
+        
+        return render_template('add_security_project.html', form=form)
+    
+    @app.route('/security-projects/edit/<int:id>', methods=['GET', 'POST'])
+    @login_required
+    def edit_security_project(id):
+        project = SecurityProject.query.get_or_404(id)
+        form = SecurityProjectEditForm(obj=project)
+        form.assigned_to.choices = [(u.id, u.username) for u in User.query.filter_by(is_active=True).all()]
+        
+        if form.validate_on_submit():
+            project.project_name = form.project_name.data
+            project.contractor = form.contractor.data
+            project.project_type = form.project_type.data
+            project.environment = form.environment.data
+            project.security_status = form.security_status.data
+            project.priority = form.priority.data
+            project.description = form.description.data
+            project.security_requirements = form.security_requirements.data
+            project.vulnerabilities_found = form.vulnerabilities_found.data
+            project.remediation_plan = form.remediation_plan.data
+            project.assigned_to = form.assigned_to.data
+            project.start_date = form.start_date.data
+            project.completion_date = form.completion_date.data
+            project.estimated_duration = int(form.estimated_duration.data) if form.estimated_duration.data else None
+            project.actual_duration = int(form.actual_duration.data) if form.actual_duration.data else None
+            
+            # محاسبه مدت زمان واقعی
+            if project.start_date and project.completion_date:
+                delta = project.completion_date - project.start_date
+                project.actual_duration = delta.days
+            
+            project.updated_at = datetime.utcnow()
+            db.session.commit()
+            flash('پروژه امنیتی با موفقیت ویرایش شد.', 'success')
+            return redirect(url_for('security_projects'))
+        
+        return render_template('edit_security_project.html', form=form, project=project)
+    
+    @app.route('/security-projects/delete/<int:id>', methods=['POST'])
+    @login_required
+    def delete_security_project(id):
+        project = SecurityProject.query.get_or_404(id)
+        db.session.delete(project)
+        db.session.commit()
+        flash('پروژه امنیتی با موفقیت حذف شد.', 'success')
+        return redirect(url_for('security_projects'))
+    
+    # Content management routes (keeping for backward compatibility)
+    @app.route('/content')
+    @login_required
+    def content():
+        page = request.args.get('page', 1, type=int)
+        query = request.args.get('query', '')
+        content_type = request.args.get('content_type', '')
+        status = request.args.get('status', '')
+        
+        # ساخت کوئری پایه
+        content_query = Content.query
+        
+        # اعمال فیلترها
+        if query:
+            content_query = content_query.filter(
+                Content.title.contains(query) | 
+                Content.content.contains(query)
+            )
+        
+        if content_type:
+            content_query = content_query.filter_by(content_type=content_type)
+        
+        if status:
+            content_query = content_query.filter_by(status=status)
+        
+        content = content_query.paginate(page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
+        return render_template('content.html', content=content)
+    
+    @app.route('/content/add', methods=['GET', 'POST'])
+    @login_required
+    def add_content():
+        form = ContentForm()
+        if form.validate_on_submit():
+            content = Content(
+                title=form.title.data,
+                content=form.content.data,
+                slug=form.slug.data,
+                content_type=form.content_type.data,
+                status=form.status.data,
+                author_id=current_user.id
+            )
+            if form.status.data == 'published':
+                content.published_at = datetime.utcnow()
+            
+            db.session.add(content)
+            db.session.commit()
+            flash('محتوا با موفقیت اضافه شد.', 'success')
+            return redirect(url_for('content'))
+        
+        return render_template('add_content.html', form=form)
+    
+    # Backup management routes
+    @app.route('/backups')
+    @login_required
+    def backups():
+        page = request.args.get('page', 1, type=int)
+        query = request.args.get('query', '')
+        backup_type = request.args.get('backup_type', '')
+        status = request.args.get('status', '')
+        
+        # ساخت کوئری پایه
+        backups_query = Backup.query
+        
+        # اعمال فیلترها
+        if query:
+            backups_query = backups_query.filter(
+                Backup.name.contains(query) | 
+                Backup.file_path.contains(query)
+            )
+        
+        if backup_type:
+            backups_query = backups_query.filter_by(backup_type=backup_type)
+        
+        if status:
+            backups_query = backups_query.filter_by(status=status)
+        
+        backups = backups_query.paginate(page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
+        return render_template('backups.html', backups=backups)
+    
+    @app.route('/backups/add', methods=['GET', 'POST'])
+    @login_required
+    def add_backup():
+        form = BackupForm()
+        if form.validate_on_submit():
+            backup = Backup(
+                name=form.name.data,
+                file_path=form.file_path.data,
+                file_size=form.file_size.data,
+                backup_type=form.backup_type.data,
+                status=form.status.data
+            )
+            db.session.add(backup)
+            db.session.commit()
+            flash('بکاپ با موفقیت اضافه شد.', 'success')
+            return redirect(url_for('backups'))
+        
+        return render_template('add_backup.html', form=form)
+    
+    @app.route('/backups/edit/<int:id>', methods=['GET', 'POST'])
+    @login_required
+    def edit_backup(id):
+        backup = Backup.query.get_or_404(id)
+        form = BackupForm(obj=backup)
+        
+        if form.validate_on_submit():
+            backup.name = form.name.data
+            backup.file_path = form.file_path.data
+            backup.file_size = form.file_size.data
+            backup.backup_type = form.backup_type.data
+            backup.status = form.status.data
+            if form.status.data == 'completed':
+                backup.completed_at = datetime.utcnow()
+            db.session.commit()
+            flash('بکاپ با موفقیت ویرایش شد.', 'success')
+            return redirect(url_for('backups'))
+        
+        return render_template('edit_backup.html', form=form, backup=backup)
+    
+    @app.route('/backups/delete/<int:id>', methods=['POST'])
+    @login_required
+    def delete_backup(id):
+        backup = Backup.query.get_or_404(id)
+        db.session.delete(backup)
+        db.session.commit()
+        flash('بکاپ با موفقیت حذف شد.', 'success')
+        return redirect(url_for('backups'))
+    
+    # Search functionality
+    @app.route('/search', methods=['GET', 'POST'])
+    @login_required
+    def search():
+        form = SearchForm()
+        results = []
+        
+        if form.validate_on_submit():
+            query = form.query.data
+            search_type = form.search_type.data
+            
+            if search_type == 'all' or search_type == 'users':
+                users = User.query.filter(User.username.contains(query) | User.email.contains(query)).all()
+                results.extend([('user', u) for u in users])
+            
+            if search_type == 'all' or search_type == 'servers':
+                servers = Server.query.filter(Server.name.contains(query) | Server.description.contains(query)).all()
+                results.extend([('server', s) for s in servers])
+            
+            if search_type == 'all' or search_type == 'tasks':
+                tasks = Task.query.filter(Task.title.contains(query) | Task.description.contains(query)).all()
+                results.extend([('task', t) for t in tasks])
+            
+            if search_type == 'all' or search_type == 'content':
+                content = Content.query.filter(Content.title.contains(query) | Content.content.contains(query)).all()
+                results.extend([('content', c) for c in content])
+        
+        return render_template('search.html', form=form, results=results)
+    
+    # Custom Fields Management
+    @app.route('/custom-fields')
+    @login_required
+    def custom_fields():
+        if current_user.role != 'admin':
+            flash('شما دسترسی لازم را ندارید.', 'error')
+            return redirect(url_for('dashboard'))
+        
+        page = request.args.get('page', 1, type=int)
+        fields = CustomField.query.order_by(CustomField.model_name, CustomField.order).paginate(
+            page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
+        return render_template('custom_fields.html', fields=fields)
+    
+    @app.route('/custom-fields/add', methods=['GET', 'POST'])
+    @login_required
+    def add_custom_field():
+        if current_user.role != 'admin':
+            flash('شما دسترسی لازم را ندارید.', 'error')
+            return redirect(url_for('custom_fields'))
+        
+        form = CustomFieldForm()
+        if form.validate_on_submit():
+            # بررسی تکراری نبودن نام فیلد
+            existing_field = CustomField.query.filter_by(
+                name=form.name.data, 
+                model_name=form.model_name.data
+            ).first()
+            
+            if existing_field:
+                flash('فیلد با این نام قبلاً برای این مدل تعریف شده است.', 'error')
+                return render_template('add_custom_field.html', form=form)
+            
+            field = CustomField(
+                name=form.name.data,
+                label=form.label.data,
+                field_type=form.field_type.data,
+                model_name=form.model_name.data,
+                is_required=form.is_required.data,
+                is_active=form.is_active.data,
+                placeholder=form.placeholder.data,
+                help_text=form.help_text.data,
+                order=int(form.order.data) if form.order.data else 0
+            )
+            
+            # پردازش گزینه‌های انتخابی
+            if form.options.data and form.field_type.data == 'select':
+                options_list = [opt.strip() for opt in form.options.data.split('\n') if opt.strip()]
+                field.set_options(options_list)
+            
+            db.session.add(field)
+            db.session.commit()
+            flash('فیلد سفارشی با موفقیت اضافه شد.', 'success')
+            return redirect(url_for('custom_fields'))
+        
+        return render_template('add_custom_field.html', form=form)
+    
+    @app.route('/custom-fields/edit/<int:id>', methods=['GET', 'POST'])
+    @login_required
+    def edit_custom_field(id):
+        if current_user.role != 'admin':
+            flash('شما دسترسی لازم را ندارید.', 'error')
+            return redirect(url_for('custom_fields'))
+        
+        field = CustomField.query.get_or_404(id)
+        form = CustomFieldEditForm(obj=field)
+        
+        # نمایش گزینه‌های موجود
+        if field.field_type == 'select' and field.options:
+            form.options.data = '\n'.join(field.get_options())
+        
+        if form.validate_on_submit():
+            field.label = form.label.data
+            field.field_type = form.field_type.data
+            field.is_required = form.is_required.data
+            field.is_active = form.is_active.data
+            field.placeholder = form.placeholder.data
+            field.help_text = form.help_text.data
+            field.order = int(form.order.data) if form.order.data else 0
+            
+            # پردازش گزینه‌های انتخابی
+            if form.options.data and form.field_type.data == 'select':
+                options_list = [opt.strip() for opt in form.options.data.split('\n') if opt.strip()]
+                field.set_options(options_list)
+            else:
+                field.options = None
+            
+            db.session.commit()
+            flash('فیلد سفارشی با موفقیت ویرایش شد.', 'success')
+            return redirect(url_for('custom_fields'))
+        
+        return render_template('edit_custom_field.html', form=form, field=field)
+    
+    @app.route('/custom-fields/delete/<int:id>', methods=['POST'])
+    @login_required
+    def delete_custom_field(id):
+        if current_user.role != 'admin':
+            flash('شما دسترسی لازم را ندارید.', 'error')
+            return redirect(url_for('custom_fields'))
+        
+        field = CustomField.query.get_or_404(id)
+        
+        # حذف مقادیر مربوطه
+        CustomFieldValue.query.filter_by(field_id=id).delete()
+        
+        db.session.delete(field)
+        db.session.commit()
+        flash('فیلد سفارشی با موفقیت حذف شد.', 'success')
+        return redirect(url_for('custom_fields'))
+    
+    # API for dynamic field values
+    @app.route('/api/custom-field-value', methods=['POST'])
+    @login_required
+    def save_custom_field_value():
+        data = request.get_json()
+        field_id = data.get('field_id')
+        model_name = data.get('model_name')
+        record_id = data.get('record_id')
+        value = data.get('value')
+        
+        # پیدا کردن یا ایجاد مقدار فیلد
+        field_value = CustomFieldValue.query.filter_by(
+            field_id=field_id,
+            model_name=model_name,
+            record_id=record_id
+        ).first()
+        
+        if field_value:
+            field_value.value = value
+        else:
+            field_value = CustomFieldValue(
+                field_id=field_id,
+                model_name=model_name,
+                record_id=record_id,
+                value=value
+            )
+            db.session.add(field_value)
+        
+        db.session.commit()
+        return jsonify({'success': True})
+    
+    @app.route('/api/custom-field-values/<model_name>/<int:record_id>')
+    @login_required
+    def get_custom_field_values(model_name, record_id):
+        values = CustomFieldValue.query.filter_by(
+            model_name=model_name,
+            record_id=record_id
+        ).all()
+        
+        result = {}
+        for value in values:
+            result[value.field.name] = {
+                'value': value.value,
+                'field_type': value.field.field_type,
+                'label': value.field.label,
+                'field_id': value.field_id
+            }
+        
+        return jsonify(result)
+    
+    # API برای دریافت فیلدهای داینامیک یک مدل
+    @app.route('/api/custom-fields/<model_name>')
+    @login_required
+    def get_custom_fields_for_model(model_name):
+        fields = CustomField.query.filter_by(
+            model_name=model_name,
+            is_active=True
+        ).order_by(CustomField.order).all()
+        
+        result = []
+        for field in fields:
+            result.append({
+                'id': field.id,
+                'name': field.name,
+                'label': field.label,
+                'field_type': field.field_type,
+                'is_required': field.is_required,
+                'placeholder': field.placeholder,
+                'help_text': field.help_text,
+                'options': field.get_options() if field.field_type == 'select' else None
+            })
+        
+        return jsonify(result)
+    
+    # API برای حذف فیلد سفارشی
+    @app.route('/api/custom-fields/<int:field_id>/delete', methods=['POST'])
+    @login_required
+    def delete_custom_field_api(field_id):
+        if current_user.role != 'admin':
+            return jsonify({'success': False, 'error': 'دسترسی غیرمجاز'})
+        
+        field = CustomField.query.get_or_404(field_id)
+        
+        # حذف مقادیر مربوطه
+        CustomFieldValue.query.filter_by(field_id=field_id).delete()
+        
+        db.session.delete(field)
+        db.session.commit()
+        
+        return jsonify({'success': True})
+    
+    # API برای تغییر وضعیت فیلد
+    @app.route('/api/custom-fields/<int:field_id>/toggle', methods=['POST'])
+    @login_required
+    def toggle_custom_field(field_id):
+        if current_user.role != 'admin':
+            return jsonify({'success': False, 'error': 'دسترسی غیرمجاز'})
+        
+        field = CustomField.query.get_or_404(field_id)
+        field.is_active = not field.is_active
+        db.session.commit()
+        
+        return jsonify({'success': True, 'is_active': field.is_active})
+    
+    # API routes for AJAX
+    @app.route('/api/task/<int:id>/status', methods=['POST'])
+    @login_required
+    def update_task_status(id):
+        task = Task.query.get_or_404(id)
+        new_status = request.json.get('status')
+        
+        if new_status in ['pending', 'in_progress', 'completed', 'cancelled']:
+            task.status = new_status
+            if new_status == 'completed':
+                task.completed_at = datetime.utcnow()
+            db.session.commit()
+            return jsonify({'success': True, 'status': new_status})
+        
+        return jsonify({'success': False, 'error': 'Invalid status'})
+    
+    # Notification API
+    @app.route('/api/notifications')
+    @login_required
+    def get_notifications():
+        notifications = Notification.query.filter_by(user_id=current_user.id).order_by(Notification.created_at.desc()).limit(10).all()
+        return jsonify([{
+            'id': n.id,
+            'title': n.title,
+            'message': n.message,
+            'type': n.type,
+            'is_read': n.is_read,
+            'created_at': n.created_at.isoformat()
+        } for n in notifications])
+    
+    @app.route('/api/notifications/<int:id>/read', methods=['POST'])
+    @login_required
+    def mark_notification_read(id):
+        notification = Notification.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+        notification.mark_as_read()
+        return jsonify({'success': True})
+    
+    @app.route('/api/notifications/read-all', methods=['POST'])
+    @login_required
+    def mark_all_notifications_read():
+        Notification.query.filter_by(user_id=current_user.id, is_read=False).update({'is_read': True, 'read_at': datetime.utcnow()})
+        db.session.commit()
+        return jsonify({'success': True})
+    
+    # Credential Management Routes
+    @app.route('/credentials')
+    @login_required
+    def credentials():
+        page = request.args.get('page', 1, type=int)
+        search_form = CredentialSearchForm()
+        
+        # فیلترها
+        query = request.args.get('query', '')
+        service_type = request.args.get('service_type', '')
+        tags = request.args.get('tags', '')
+        
+        # ساخت کوئری
+        credentials_query = Credential.query.filter_by(created_by=current_user.id)
+        
+        if query:
+            credentials_query = credentials_query.filter(
+                Credential.name.contains(query) | 
+                Credential.username.contains(query) |
+                Credential.description.contains(query)
+            )
+        
+        if service_type:
+            credentials_query = credentials_query.filter_by(service_type=service_type)
+        
+        if tags:
+            credentials_query = credentials_query.filter(Credential.tags.contains(tags))
+        
+        credentials = credentials_query.order_by(Credential.updated_at.desc()).paginate(
+            page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
+        
+        return render_template('credentials.html', credentials=credentials, search_form=search_form)
+    
+    @app.route('/credentials/add', methods=['GET', 'POST'])
+    @login_required
+    def add_credential():
+        form = CredentialForm()
+        if form.validate_on_submit():
+            credential = Credential(
+                name=form.name.data,
+                service_type=form.service_type.data,
+                username=form.username.data,
+                url=form.url.data,
+                description=form.description.data,
+                is_active=form.is_active.data,
+                created_by=current_user.id
+            )
+            credential.set_password(form.password.data)
+            credential.set_tags_list([tag.strip() for tag in form.tags.data.split(',') if tag.strip()])
+            
+            db.session.add(credential)
+            db.session.commit()
+            flash('رمز عبور با موفقیت اضافه شد.', 'success')
+            return redirect(url_for('credentials'))
+        
+        return render_template('add_credential.html', form=form)
+    
+    @app.route('/credentials/edit/<int:id>', methods=['GET', 'POST'])
+    @login_required
+    def edit_credential(id):
+        credential = Credential.query.filter_by(id=id, created_by=current_user.id).first_or_404()
+        form = CredentialEditForm(obj=credential)
+        
+        # تنظیم برچسب‌ها
+        form.tags.data = ', '.join(credential.get_tags_list())
+        
+        if form.validate_on_submit():
+            credential.name = form.name.data
+            credential.service_type = form.service_type.data
+            credential.username = form.username.data
+            credential.url = form.url.data
+            credential.description = form.description.data
+            credential.is_active = form.is_active.data
+            
+            # تغییر رمز عبور اگر ارائه شده
+            if form.password.data:
+                credential.set_password(form.password.data)
+            
+            credential.set_tags_list([tag.strip() for tag in form.tags.data.split(',') if tag.strip()])
+            credential.updated_at = datetime.utcnow()
+            
+            db.session.commit()
+            flash('رمز عبور با موفقیت ویرایش شد.', 'success')
+            return redirect(url_for('credentials'))
+        
+        return render_template('edit_credential.html', form=form, credential=credential)
+    
+    @app.route('/credentials/delete/<int:id>', methods=['POST'])
+    @login_required
+    @csrf.exempt
+    def delete_credential(id):
+        credential = Credential.query.filter_by(id=id, created_by=current_user.id).first_or_404()
+        db.session.delete(credential)
+        db.session.commit()
+        flash('رمز عبور با موفقیت حذف شد.', 'success')
         return redirect(url_for('credentials'))
     
-    creds = Credential.query.all()
-    return render_template('credentials.html', credentials=creds)
-
-@app.route('/servers', methods=['GET', 'POST'])
-def servers():
-    if request.method == 'POST':
-        name = request.form['name']
-        ip = request.form['ip_address']
-        os_type = request.form['os_type']
-        status = request.form['status']
-        server = Server(name=name, ip_address=ip, os_type=os_type, status=status)
-        db.session.add(server)
+    @app.route('/credentials/view/<int:id>')
+    @login_required
+    def view_credential(id):
+        credential = Credential.query.filter_by(id=id, created_by=current_user.id).first_or_404()
+        return render_template('view_credential.html', credential=credential)
+    
+    @app.route('/api/credentials/<int:id>/password')
+    @login_required
+    def get_credential_password(id):
+        credential = Credential.query.filter_by(id=id, created_by=current_user.id).first_or_404()
+        # در اینجا باید رمز عبور را رمزگشایی کنیم - این یک پیاده‌سازی ساده است
+        # در واقعیت باید از کلیدهای رمزنگاری استفاده کنید
+        return jsonify({'password': 'رمز عبور رمزنگاری شده است'})
+    
+    @app.route('/api/credentials/<int:id>/use', methods=['POST'])
+    @login_required
+    def mark_credential_used(id):
+        credential = Credential.query.filter_by(id=id, created_by=current_user.id).first_or_404()
+        credential.last_used = datetime.utcnow()
         db.session.commit()
-        return redirect(url_for('servers'))
+        return jsonify({'success': True})
+    
+    # Helper function to get custom fields for records
+    def get_custom_fields_for_records(records, model_name):
+        """دریافت فیلدهای سفارشی برای لیست رکوردها"""
+        if not records:
+            return {}
+        
+        # دریافت فیلدهای سفارشی فعال برای مدل
+        custom_fields = CustomField.query.filter_by(
+            model_name=model_name, 
+            is_active=True
+        ).order_by(CustomField.order).all()
+        
+        if not custom_fields:
+            return {}
+        
+        # دریافت مقادیر فیلدهای سفارشی
+        record_ids = [record.id for record in records]
+        custom_values = CustomFieldValue.query.filter(
+            CustomFieldValue.model_name == model_name,
+            CustomFieldValue.record_id.in_(record_ids)
+        ).all()
+        
+        # سازماندهی داده‌ها
+        result = {}
+        for record in records:
+            result[record.id] = {}
+            for field in custom_fields:
+                # پیدا کردن مقدار فیلد برای این رکورد
+                field_value = next(
+                    (cv for cv in custom_values if cv.field_id == field.id and cv.record_id == record.id),
+                    None
+                )
+                result[record.id][field.name] = {
+                    'label': field.label,
+                    'value': field_value.value if field_value else '',
+                    'field_type': field.field_type
+                }
+        
+        return result
 
-    server_list = Server.query.all()
-    return render_template('servers.html', servers=server_list)
+    # Helper function to get custom fields structure for templates
+    def get_custom_fields_structure(custom_fields_data):
+        """دریافت ساختار فیلدهای سفارشی برای template"""
+        if not custom_fields_data:
+            return []
+        
+        # پیدا کردن اولین رکورد که فیلدهای سفارشی دارد
+        for record_id, fields in custom_fields_data.items():
+            if fields:
+                return list(fields.items())
+        
+        return []
 
-@app.route('/tasks', methods=['GET', 'POST'])
-def tasks():
-    # فعلاً بدون دیتابیس، فقط نمایش قالب
-    return render_template('tasks.html', tasks=[])
+    # User Profile Routes
+    @app.route('/profile')
+    @login_required
+    def profile():
+        # آمار شخصی کاربر
+        user_stats = {
+            'tasks_count': Task.query.filter_by(assigned_to=current_user.id).count(),
+            'completed_tasks': Task.query.filter_by(assigned_to=current_user.id, status='completed').count(),
+            'pending_tasks': Task.query.filter_by(assigned_to=current_user.id, status='pending').count(),
+            'credentials_count': Credential.query.filter_by(created_by=current_user.id).count(),
+            'notifications_count': Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
+        }
+        
+        # آخرین فعالیت‌ها
+        recent_tasks = Task.query.filter_by(assigned_to=current_user.id).order_by(Task.created_at.desc()).limit(5).all()
+        recent_credentials = Credential.query.filter_by(created_by=current_user.id).order_by(Credential.created_at.desc()).limit(5).all()
+        
+        return render_template('profile.html', 
+                             user_stats=user_stats, 
+                             recent_tasks=recent_tasks, 
+                             recent_credentials=recent_credentials)
+    
+    @app.route('/profile/edit', methods=['GET', 'POST'])
+    @login_required
+    def edit_profile():
+        form = EditUserForm(obj=current_user)
+        
+        if form.validate_on_submit():
+            # بررسی تکراری نبودن ایمیل
+            existing_user = User.query.filter(User.email == form.email.data, User.id != current_user.id).first()
+            if existing_user:
+                flash('ایمیل قبلاً استفاده شده است.', 'error')
+                return render_template('edit_profile.html', form=form)
+            
+            current_user.username = form.username.data
+            current_user.email = form.email.data
+            db.session.commit()
+            flash('پروفایل با موفقیت به‌روزرسانی شد.', 'success')
+            return redirect(url_for('profile'))
+        
+        return render_template('edit_profile.html', form=form)
+    
+    @app.route('/profile/change-password', methods=['GET', 'POST'])
+    @login_required
+    def change_password():
+        form = ChangePasswordForm()
+        
+        if form.validate_on_submit():
+            if current_user.check_password(form.current_password.data):
+                current_user.set_password(form.new_password.data)
+                db.session.commit()
+                flash('رمز عبور با موفقیت تغییر کرد.', 'success')
+                return redirect(url_for('profile'))
+            else:
+                flash('رمز عبور فعلی اشتباه است.', 'error')
+        
+        return render_template('change_password.html', form=form)
+    
+    @app.route('/profile/credentials')
+    @login_required
+    def personal_credentials():
+        """رمزهای شخصی کاربر"""
+        page = request.args.get('page', 1, type=int)
+        search_form = CredentialSearchForm()
+        
+        # فیلترها
+        query = request.args.get('query', '')
+        service_type = request.args.get('service_type', '')
+        tags = request.args.get('tags', '')
+        
+        # ساخت کوئری - فقط رمزهای شخصی کاربر
+        credentials_query = Credential.query.filter_by(created_by=current_user.id)
+        
+        if query:
+            credentials_query = credentials_query.filter(
+                or_(
+                    Credential.name.contains(query),
+                    Credential.description.contains(query),
+                    Credential.username.contains(query)
+                )
+            )
+        
+        if service_type:
+            credentials_query = credentials_query.filter_by(service_type=service_type)
+        
+        if tags:
+            credentials_query = credentials_query.filter(Credential.tags.contains(tags))
+        
+        credentials = credentials_query.order_by(Credential.created_at.desc()).paginate(
+            page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
+        
+        return render_template('personal_credentials.html', 
+                             credentials=credentials, 
+                             search_form=search_form,
+                             query=query,
+                             service_type=service_type,
+                             tags=tags)
+    
+    @app.route('/profile/credentials/add', methods=['GET', 'POST'])
+    @login_required
+    def add_personal_credential():
+        """اضافه کردن رمز شخصی"""
+        form = CredentialForm()
+        
+        if form.validate_on_submit():
+            credential = Credential(
+                name=form.name.data,
+                service_type=form.service_type.data,
+                username=form.username.data,
+                url=form.url.data,
+                description=form.description.data,
+                created_by=current_user.id
+            )
+            
+            # تنظیم پسورد
+            credential.set_password(form.password.data)
+            
+            # تنظیم برچسب‌ها
+            if form.tags.data:
+                credential.set_tags_list([tag.strip() for tag in form.tags.data.split(',')])
+            
+            db.session.add(credential)
+            db.session.commit()
+            flash('رمز عبور شخصی با موفقیت اضافه شد.', 'success')
+            return redirect(url_for('personal_credentials'))
+        
+        return render_template('add_personal_credential.html', form=form)
 
-@app.route('/backups', methods=['GET', 'POST'])
-def backups():
-    # فعلاً بدون دیتابیس، فقط نمایش قالب
-    return render_template('backups.html', backups=[])
+    # Error handlers
+    @app.errorhandler(404)
+    def not_found_error(error):
+        return render_template('404.html'), 404
+    
+    @app.errorhandler(500)
+    def internal_error(error):
+        db.session.rollback()
+        return render_template('500.html'), 500
+    
+    return app
+
+# Create app instance
+app = create_app()
 
 if __name__ == '__main__':
     with app.app_context():

@@ -1,33 +1,167 @@
-{% extends "base.html" %}
-{% block title %}گزارش‌های بکاپ{% endblock %}
-{% set page_title = "گزارش‌های بکاپ" %}
+{% extends 'base.html' %}
+{% block page_title %}مدیریت بکاپ‌ها{% endblock %}
 {% block content %}
-  <form method="POST" class="mb-4">
-    <input name="date" type="date" class="form-control mb-2" required>
-    <input name="type" class="form-control mb-2" placeholder="نوع بکاپ" required>
-    <input name="result" class="form-control mb-2" placeholder="نتیجه" required>
-    <input name="size" class="form-control mb-2" placeholder="حجم (MB)" required>
-    <button type="submit" class="btn btn-primary">ذخیره</button>
-  </form>
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5><i class="fas fa-database"></i> مدیریت بکاپ‌ها</h5>
+  <a href="{{ url_for('add_backup') }}" class="btn btn-primary">
+    <i class="fas fa-plus"></i> بکاپ جدید
+  </a>
+</div>
 
-  <table class="table table-bordered table-striped">
-    <thead class="table-light">
-      <tr>
-        <th>تاریخ</th>
-        <th>نوع</th>
-        <th>نتیجه</th>
-        <th>حجم</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for backup in backups %}
-      <tr>
-        <td>{{ backup.date }}</td>
-        <td>{{ backup.type }}</td>
-        <td>{{ backup.result }}</td>
-        <td>{{ backup.size }} MB</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<!-- فیلتر و جستجو -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="GET" class="row g-3">
+      <div class="col-md-4">
+        <input type="text" name="query" class="form-control" placeholder="جستجو در نام بکاپ یا مسیر فایل..." value="{{ request.args.get('query', '') }}">
+      </div>
+      <div class="col-md-3">
+        <select name="backup_type" class="form-select">
+          <option value="">همه انواع</option>
+          <option value="database" {% if request.args.get('backup_type') == 'database' %}selected{% endif %}>دیتابیس</option>
+          <option value="files" {% if request.args.get('backup_type') == 'files' %}selected{% endif %}>فایل‌ها</option>
+          <option value="full" {% if request.args.get('backup_type') == 'full' %}selected{% endif %}>کامل</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select name="status" class="form-select">
+          <option value="">همه وضعیت‌ها</option>
+          <option value="pending" {% if request.args.get('status') == 'pending' %}selected{% endif %}>در انتظار</option>
+          <option value="in_progress" {% if request.args.get('status') == 'in_progress' %}selected{% endif %}>در حال انجام</option>
+          <option value="completed" {% if request.args.get('status') == 'completed' %}selected{% endif %}>تکمیل شده</option>
+          <option value="failed" {% if request.args.get('status') == 'failed' %}selected{% endif %}>ناموفق</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-outline-primary w-100">
+          <i class="fas fa-search"></i> جستجو
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    {% if backups.items %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>نام بکاپ</th>
+              <th>نوع</th>
+              <th>وضعیت</th>
+              <th>اندازه فایل</th>
+              <th>تاریخ ایجاد</th>
+              <th>عملیات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for backup in backups.items %}
+              <tr>
+                <td>
+                  <h6 class="mb-1">{{ backup.name }}</h6>
+                  <small class="text-muted">{{ backup.file_path }}</small>
+                </td>
+                <td>
+                  <span class="badge bg-{{ 'primary' if backup.backup_type == 'database' else 'success' if backup.backup_type == 'files' else 'info' }}">
+                    {{ backup.backup_type }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge bg-{{ 'success' if backup.status == 'completed' else 'warning' if backup.status == 'pending' else 'danger' }}">
+                    {{ backup.status }}
+                  </span>
+                </td>
+                <td>
+                  {% if backup.file_size %}
+                    {{ "%.2f"|format(backup.file_size / 1024 / 1024) }} MB
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                <td>{{ backup.created_at.strftime('%Y/%m/%d %H:%M') }}</td>
+                <td>
+                  <div class="btn-group" role="group">
+                    {% if backup.status == 'completed' %}
+                      <a href="#" class="btn btn-sm btn-outline-success" title="دانلود">
+                        <i class="fas fa-download"></i>
+                      </a>
+                    {% endif %}
+                    <a href="{{ url_for('edit_backup', id=backup.id) }}" class="btn btn-sm btn-outline-primary" title="ویرایش">
+                      <i class="fas fa-edit"></i>
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteBackup({{ backup.id }})" title="حذف">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- Pagination -->
+      {% if backups.pages > 1 %}
+        <nav aria-label="صفحه‌بندی">
+          <ul class="pagination justify-content-center">
+            {% if backups.has_prev %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('backups', page=backups.prev_num) }}">قبلی</a>
+              </li>
+            {% endif %}
+            
+            {% for page_num in backups.iter_pages() %}
+              {% if page_num %}
+                {% if page_num != backups.page %}
+                  <li class="page-item">
+                    <a class="page-link" href="{{ url_for('backups', page=page_num) }}">{{ page_num }}</a>
+                  </li>
+                {% else %}
+                  <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                  </li>
+                {% endif %}
+              {% else %}
+                <li class="page-item disabled">
+                  <span class="page-link">...</span>
+                </li>
+              {% endif %}
+            {% endfor %}
+            
+            {% if backups.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('backups', page=backups.next_num) }}">بعدی</a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      {% endif %}
+    {% else %}
+      <div class="text-center py-5">
+        <i class="fas fa-database fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">هیچ بکاپی یافت نشد</h5>
+        <a href="{{ url_for('add_backup') }}" class="btn btn-primary mt-3">
+          <i class="fas fa-plus"></i> اولین بکاپ را ایجاد کنید
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deleteBackup(backupId) {
+  if (confirm('آیا مطمئن هستید که می‌خواهید این بکاپ را حذف کنید؟')) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/backups/delete/${backupId}`;
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+</script>
 {% endblock %}

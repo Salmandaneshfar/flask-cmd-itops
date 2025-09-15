@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% block page_title %}جستجو{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-search"></i> جستجو در سیستم</h5>
+      </div>
+      <div class="card-body">
+        <form method="POST">
+          {{ form.hidden_tag() }}
+          
+          <div class="row">
+            <div class="col-md-8 mb-3">
+              {{ form.query.label(class="form-label") }}
+              {{ form.query(class="form-control", placeholder="عبارت جستجو را وارد کنید...") }}
+              {% if form.query.errors %}
+                <div class="text-danger">
+                  {% for error in form.query.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-4 mb-3">
+              {{ form.search_type.label(class="form-label") }}
+              {{ form.search_type(class="form-select") }}
+              {% if form.search_type.errors %}
+                <div class="text-danger">
+                  {% for error in form.search_type.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-search"></i> جستجو
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if results %}
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="mb-0">
+          <i class="fas fa-list"></i> نتایج جستجو 
+          <span class="badge bg-primary">{{ results|length }}</span>
+        </h6>
+      </div>
+      <div class="card-body">
+        {% if results %}
+          {% for result_type, result in results %}
+            <div class="card mb-3">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                  <div class="flex-grow-1">
+                    {% if result_type == 'user' %}
+                      <h6 class="card-title">
+                        <i class="fas fa-user text-primary"></i>
+                        {{ result.username }}
+                      </h6>
+                      <p class="card-text text-muted mb-1">{{ result.email }}</p>
+                      <small class="text-muted">نقش: {{ result.role }}</small>
+                    {% elif result_type == 'server' %}
+                      <h6 class="card-title">
+                        <i class="fas fa-server text-success"></i>
+                        {{ result.name }}
+                      </h6>
+                      <p class="card-text text-muted mb-1">IP: {{ result.ip_address }}</p>
+                      <small class="text-muted">سیستم عامل: {{ result.os_type }}</small>
+                    {% elif result_type == 'task' %}
+                      <h6 class="card-title">
+                        <i class="fas fa-tasks text-warning"></i>
+                        {{ result.title }}
+                      </h6>
+                      <p class="card-text text-muted mb-1">{{ result.description[:100] }}{% if result.description|length > 100 %}...{% endif %}</p>
+                      <small class="text-muted">اولویت: {{ result.priority }} | وضعیت: {{ result.status }}</small>
+                    {% elif result_type == 'content' %}
+                      <h6 class="card-title">
+                        <i class="fas fa-file-alt text-info"></i>
+                        {{ result.title }}
+                      </h6>
+                      <p class="card-text text-muted mb-1">{{ result.content[:100] }}{% if result.content|length > 100 %}...{% endif %}</p>
+                      <small class="text-muted">نوع: {{ result.content_type }} | وضعیت: {{ result.status }}</small>
+                    {% endif %}
+                  </div>
+                  <div>
+                    <span class="badge bg-{{ 'primary' if result_type == 'user' else 'success' if result_type == 'server' else 'warning' if result_type == 'task' else 'info' }}">
+                      {{ result_type }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-4">
+            <i class="fas fa-search fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">هیچ نتیجه‌ای یافت نشد</h5>
+            <p class="text-muted">لطفاً عبارت جستجوی دیگری امتحان کنید</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

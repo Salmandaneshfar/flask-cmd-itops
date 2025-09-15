@@ -1,0 +1,315 @@
+{% extends 'base.html' %}
+{% block page_title %}داشبورد{% endblock %}
+{% block content %}
+<!-- خوش‌آمدگویی -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card bg-gradient-primary text-white">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h3 class="mb-2">خوش آمدید، {{ current_user.username }}! 👋</h3>
+            <p class="mb-0 opacity-75">امروز چه کاری می‌خواهید انجام دهید؟</p>
+          </div>
+          <div class="text-end">
+            <div class="fs-6 opacity-75" id="current-date"></div>
+            <div class="fs-5 fw-bold" id="current-time"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- آمار کلی -->
+<div class="row mb-4">
+  <div class="col-lg-3 col-md-6 mb-3">
+    <div class="card stats-card stats-primary hover-lift">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <div class="stats-icon">
+            <i class="fas fa-users"></i>
+          </div>
+          <div class="flex-grow-1">
+            <h3 class="stats-number counter" data-target="{{ stats.users_count }}">0</h3>
+            <p class="stats-label">کاربران</p>
+            <small class="stats-change text-success">
+              <i class="fas fa-arrow-up"></i> +12% از ماه گذشته
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-lg-3 col-md-6 mb-3">
+    <div class="card stats-card stats-success hover-lift">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <div class="stats-icon">
+            <i class="fas fa-server"></i>
+          </div>
+          <div class="flex-grow-1">
+            <h3 class="stats-number counter" data-target="{{ stats.servers_count }}">0</h3>
+            <p class="stats-label">سرورها</p>
+            <small class="stats-change text-success">
+              <i class="fas fa-arrow-up"></i> +3 این ماه
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-lg-3 col-md-6 mb-3">
+    <div class="card stats-card stats-warning hover-lift">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <div class="stats-icon">
+            <i class="fas fa-tasks"></i>
+          </div>
+          <div class="flex-grow-1">
+            <h3 class="stats-number counter" data-target="{{ stats.tasks_count }}">0</h3>
+            <p class="stats-label">تسک‌ها</p>
+            <small class="stats-change text-warning">
+              <i class="fas fa-clock"></i> {{ stats.active_tasks }} فعال
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-lg-3 col-md-6 mb-3">
+    <div class="card stats-card stats-info hover-lift">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <div class="stats-icon">
+            <i class="fas fa-file-alt"></i>
+          </div>
+          <div class="flex-grow-1">
+            <h3 class="stats-number counter" data-target="{{ stats.content_count }}">0</h3>
+            <p class="stats-label">محتوا</p>
+            <small class="stats-change text-success">
+              <i class="fas fa-check"></i> {{ stats.published_content }} منتشر شده
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- فعالیت‌های اخیر -->
+<div class="row mb-4">
+  <div class="col-lg-6 mb-4">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">
+          <i class="fas fa-tasks text-primary"></i> تسک‌های اخیر
+        </h6>
+        <a href="{{ url_for('tasks') }}" class="btn btn-sm btn-outline-primary">مشاهده همه</a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_tasks %}
+          {% for task in recent_tasks %}
+            <div class="activity-item activity-{{ 'success' if task.status == 'completed' else 'warning' if task.status == 'in_progress' else 'primary' }}">
+              <div class="d-flex align-items-center">
+                <div class="activity-icon">
+                  <i class="fas fa-{{ 'check' if task.status == 'completed' else 'clock' if task.status == 'in_progress' else 'circle' }}"></i>
+                </div>
+                <div class="flex-grow-1">
+                  <h6 class="mb-1">{{ task.title }}</h6>
+                  <small class="text-muted">
+                    <i class="fas fa-calendar"></i> {{ task.created_at.strftime('%Y/%m/%d %H:%M') }}
+                    {% if task.assigned_user %}
+                      | <i class="fas fa-user"></i> {{ task.assigned_user.username }}
+                    {% endif %}
+                  </small>
+                </div>
+                <div>
+                  <span class="badge bg-{{ 'success' if task.status == 'completed' else 'warning' if task.status == 'in_progress' else 'secondary' }}">
+                    {{ task.status }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-4">
+            <i class="fas fa-tasks fa-3x text-muted mb-3"></i>
+            <p class="text-muted">هیچ تسکی یافت نشد</p>
+            <a href="{{ url_for('add_task') }}" class="btn btn-primary btn-sm">تسک جدید ایجاد کنید</a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-lg-6 mb-4">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">
+          <i class="fas fa-file-alt text-info"></i> محتوای اخیر
+        </h6>
+        <a href="{{ url_for('content') }}" class="btn btn-sm btn-outline-primary">مشاهده همه</a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_content %}
+          {% for content in recent_content %}
+            <div class="activity-item activity-{{ 'success' if content.status == 'published' else 'warning' if content.status == 'draft' else 'info' }}">
+              <div class="d-flex align-items-center">
+                <div class="activity-icon">
+                  <i class="fas fa-{{ 'check-circle' if content.status == 'published' else 'edit' if content.status == 'draft' else 'archive' }}"></i>
+                </div>
+                <div class="flex-grow-1">
+                  <h6 class="mb-1">{{ content.title }}</h6>
+                  <small class="text-muted">
+                    <i class="fas fa-calendar"></i> {{ content.created_at.strftime('%Y/%m/%d %H:%M') }}
+                    | <i class="fas fa-user"></i> {{ content.author.username }}
+                  </small>
+                </div>
+                <div>
+                  <span class="badge bg-{{ 'success' if content.status == 'published' else 'warning' if content.status == 'draft' else 'secondary' }}">
+                    {{ content.status }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-4">
+            <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+            <p class="text-muted">هیچ محتوایی یافت نشد</p>
+            <a href="{{ url_for('add_content') }}" class="btn btn-primary btn-sm">محتوا جدید ایجاد کنید</a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- دسترسی سریع -->
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="mb-0">
+          <i class="fas fa-bolt text-warning"></i> دسترسی سریع
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-lg-3 col-md-6 mb-3">
+            <a href="{{ url_for('add_task') }}" class="quick-action">
+              <div class="quick-action-icon">
+                <i class="fas fa-plus"></i>
+              </div>
+              <h6>تسک جدید</h6>
+              <p>ایجاد و مدیریت تسک‌های جدید</p>
+            </a>
+          </div>
+          
+          <div class="col-lg-3 col-md-6 mb-3">
+            <a href="{{ url_for('add_content') }}" class="quick-action">
+              <div class="quick-action-icon">
+                <i class="fas fa-file-alt"></i>
+              </div>
+              <h6>محتوا جدید</h6>
+              <p>ایجاد صفحات و مطالب جدید</p>
+            </a>
+          </div>
+          
+          <div class="col-lg-3 col-md-6 mb-3">
+            <a href="{{ url_for('add_server') }}" class="quick-action">
+              <div class="quick-action-icon">
+                <i class="fas fa-server"></i>
+              </div>
+              <h6>سرور جدید</h6>
+              <p>ثبت و مدیریت سرورهای جدید</p>
+            </a>
+          </div>
+          
+          <div class="col-lg-3 col-md-6 mb-3">
+            <a href="{{ url_for('add_user') }}" class="quick-action">
+              <div class="quick-action-icon">
+                <i class="fas fa-user-plus"></i>
+              </div>
+              <h6>کاربر جدید</h6>
+              <p>اضافه کردن کاربران جدید</p>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// نمایش تاریخ و زمان واقعی
+function updateDateTime() {
+  const now = new Date();
+  
+  // نمایش تاریخ
+  const dateOptions = {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  };
+  const dateString = now.toLocaleDateString('fa-IR', dateOptions);
+  document.getElementById('current-date').textContent = dateString;
+  
+  // نمایش زمان
+  const timeOptions = {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  };
+  const timeString = now.toLocaleTimeString('fa-IR', timeOptions);
+  document.getElementById('current-time').textContent = timeString;
+}
+
+// به‌روزرسانی هر ثانیه
+setInterval(updateDateTime, 1000);
+updateDateTime(); // اجرای فوری
+
+// انیمیشن شمارنده‌ها
+function animateCounters() {
+  const counters = document.querySelectorAll('.stats-number');
+  
+  counters.forEach(counter => {
+    const target = parseInt(counter.textContent);
+    const duration = 2000; // 2 ثانیه
+    const increment = target / (duration / 16); // 60 FPS
+    let current = 0;
+    
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= target) {
+        current = target;
+        clearInterval(timer);
+      }
+      counter.textContent = Math.floor(current);
+    }, 16);
+  });
+}
+
+// اجرای انیمیشن پس از بارگذاری صفحه
+document.addEventListener('DOMContentLoaded', animateCounters);
+
+// انیمیشن hover برای کارت‌ها
+document.querySelectorAll('.stats-card').forEach(card => {
+  card.addEventListener('mouseenter', function() {
+    this.style.transform = 'translateY(-8px) scale(1.02)';
+  });
+  
+  card.addEventListener('mouseleave', function() {
+    this.style.transform = 'translateY(0) scale(1)';
+  });
+});
+</script>
+{% endblock %}

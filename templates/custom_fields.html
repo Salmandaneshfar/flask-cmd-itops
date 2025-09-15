@@ -1,0 +1,352 @@
+{% extends 'base.html' %}
+{% block page_title %}مدیریت فیلدهای سفارشی{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5><i class="fas fa-cogs"></i> مدیریت فیلدهای سفارشی</h5>
+  <div>
+    <button class="btn btn-outline-info me-2" onclick="refreshFields()">
+      <i class="fas fa-sync-alt"></i> به‌روزرسانی
+    </button>
+    <a href="{{ url_for('add_custom_field') }}" class="btn btn-primary">
+      <i class="fas fa-plus"></i> فیلد جدید
+    </a>
+  </div>
+</div>
+
+<!-- فیلتر و جستجو -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-4">
+        <select class="form-select" id="modelFilter">
+          <option value="">همه مدل‌ها</option>
+          <option value="User">کاربران</option>
+          <option value="Server">سرورها</option>
+          <option value="Task">تسک‌ها</option>
+          <option value="Content">محتوا</option>
+          <option value="Backup">بکاپ‌ها</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <select class="form-select" id="typeFilter">
+          <option value="">همه انواع</option>
+          <option value="text">متن</option>
+          <option value="number">عدد</option>
+          <option value="email">ایمیل</option>
+          <option value="date">تاریخ</option>
+          <option value="select">انتخاب از لیست</option>
+          <option value="textarea">متن طولانی</option>
+          <option value="checkbox">چک باکس</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <input type="text" class="form-control" id="searchField" placeholder="جستجو در فیلدها...">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    {% if fields.items %}
+      <div class="table-responsive">
+        <table class="table table-hover" id="fieldsTable">
+          <thead>
+            <tr>
+              <th>نام فیلد</th>
+              <th>برچسب</th>
+              <th>نوع</th>
+              <th>مدل</th>
+              <th>وضعیت</th>
+              <th>ترتیب</th>
+              <th>عملیات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for field in fields.items %}
+              <tr data-model="{{ field.model_name }}" data-type="{{ field.field_type }}">
+                <td>
+                  <code>{{ field.name }}</code>
+                </td>
+                <td>
+                  <strong>{{ field.label }}</strong>
+                  {% if field.help_text %}
+                    <br><small class="text-muted">{{ field.help_text }}</small>
+                  {% endif %}
+                </td>
+                <td>
+                  <span class="badge bg-{{ 'primary' if field.field_type == 'text' else 'success' if field.field_type == 'number' else 'info' if field.field_type == 'email' else 'warning' if field.field_type == 'date' else 'secondary' if field.field_type == 'select' else 'dark' }}">
+                    {{ field.field_type }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge bg-info">{{ field.model_name }}</span>
+                </td>
+                <td>
+                  <div class="d-flex align-items-center">
+                    <span class="badge bg-{{ 'success' if field.is_active else 'secondary' }} me-2">
+                      {{ 'فعال' if field.is_active else 'غیرفعال' }}
+                    </span>
+                    {% if field.is_required %}
+                      <span class="badge bg-danger">اجباری</span>
+                    {% endif %}
+                  </div>
+                </td>
+                <td>
+                  <span class="badge bg-light text-dark">{{ field.order }}</span>
+                </td>
+                <td>
+                  <div class="btn-group" role="group">
+                    <a href="{{ url_for('edit_custom_field', id=field.id) }}" class="btn btn-sm btn-outline-primary">
+                      <i class="fas fa-edit"></i>
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteField({{ field.id }})">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- Pagination -->
+      {% if fields.pages > 1 %}
+        <nav aria-label="صفحه‌بندی">
+          <ul class="pagination justify-content-center">
+            {% if fields.has_prev %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('custom_fields', page=fields.prev_num) }}">قبلی</a>
+              </li>
+            {% endif %}
+            
+            {% for page_num in fields.iter_pages() %}
+              {% if page_num %}
+                {% if page_num != fields.page %}
+                  <li class="page-item">
+                    <a class="page-link" href="{{ url_for('custom_fields', page=page_num) }}">{{ page_num }}</a>
+                  </li>
+                {% else %}
+                  <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                  </li>
+                {% endif %}
+              {% else %}
+                <li class="page-item disabled">
+                  <span class="page-link">...</span>
+                </li>
+              {% endif %}
+            {% endfor %}
+            
+            {% if fields.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('custom_fields', page=fields.next_num) }}">بعدی</a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      {% endif %}
+    {% else %}
+      <div class="text-center py-5">
+        <i class="fas fa-cogs fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">هیچ فیلد سفارشی یافت نشد</h5>
+        <p class="text-muted">برای شروع، اولین فیلد سفارشی را اضافه کنید</p>
+        <a href="{{ url_for('add_custom_field') }}" class="btn btn-primary mt-3">
+          <i class="fas fa-plus"></i> فیلد جدید اضافه کنید
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal حذف -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">حذف فیلد سفارشی</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>آیا مطمئن هستید که می‌خواهید این فیلد را حذف کنید؟</p>
+        <p class="text-danger"><strong>توجه:</strong> تمام مقادیر مربوط به این فیلد نیز حذف خواهد شد.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">انصراف</button>
+        <button type="button" class="btn btn-danger" id="confirmDelete">حذف</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let fieldToDelete = null;
+
+// فیلتر جدول
+document.getElementById('modelFilter').addEventListener('change', filterTable);
+document.getElementById('typeFilter').addEventListener('change', filterTable);
+document.getElementById('searchField').addEventListener('input', filterTable);
+
+function filterTable() {
+  const modelFilter = document.getElementById('modelFilter').value;
+  const typeFilter = document.getElementById('typeFilter').value;
+  const searchTerm = document.getElementById('searchField').value.toLowerCase();
+  
+  const rows = document.querySelectorAll('#fieldsTable tbody tr');
+  
+  rows.forEach(row => {
+    const model = row.getAttribute('data-model');
+    const type = row.getAttribute('data-type');
+    const text = row.textContent.toLowerCase();
+    
+    const modelMatch = !modelFilter || model === modelFilter;
+    const typeMatch = !typeFilter || type === typeFilter;
+    const searchMatch = !searchTerm || text.includes(searchTerm);
+    
+    if (modelMatch && typeMatch && searchMatch) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+}
+
+// حذف فیلد
+function deleteField(fieldId) {
+  fieldToDelete = fieldId;
+  const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+  modal.show();
+}
+
+document.getElementById('confirmDelete').addEventListener('click', function() {
+  if (fieldToDelete) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/custom-fields/delete/${fieldToDelete}`;
+    document.body.appendChild(form);
+    form.submit();
+  }
+});
+
+// انیمیشن ورود ردیف‌ها
+document.addEventListener('DOMContentLoaded', function() {
+  const rows = document.querySelectorAll('#fieldsTable tbody tr');
+  rows.forEach((row, index) => {
+    row.style.opacity = '0';
+    row.style.transform = 'translateY(20px)';
+    
+    setTimeout(() => {
+      row.style.transition = 'all 0.3s ease';
+      row.style.opacity = '1';
+      row.style.transform = 'translateY(0)';
+    }, index * 50);
+  });
+});
+
+// تابع‌های مدیریت فیلدها
+function refreshFields() {
+  location.reload();
+}
+
+function filterByModel() {
+  const model = document.getElementById('modelFilter').value;
+  filterFields();
+}
+
+function filterByType() {
+  const type = document.getElementById('typeFilter').value;
+  filterFields();
+}
+
+function filterByStatus() {
+  const status = document.getElementById('statusFilter').value;
+  filterFields();
+}
+
+function filterFields() {
+  const model = document.getElementById('modelFilter').value;
+  const type = document.getElementById('typeFilter').value;
+  const status = document.getElementById('statusFilter').value;
+  
+  const rows = document.querySelectorAll('.field-row');
+  rows.forEach(row => {
+    let show = true;
+    
+    if (model && !row.dataset.model.includes(model)) show = false;
+    if (type && !row.dataset.type.includes(type)) show = false;
+    if (status) {
+      const isActive = row.querySelector('.badge').textContent.includes('فعال');
+      if (status === 'active' && !isActive) show = false;
+      if (status === 'inactive' && isActive) show = false;
+    }
+    
+    row.style.display = show ? '' : 'none';
+  });
+}
+
+// تابع حذف فیلد
+async function deleteField(fieldId) {
+  if (!confirm('آیا مطمئن هستید که می‌خواهید این فیلد را حذف کنید؟')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/custom-fields/${fieldId}/delete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (response.ok) {
+      const row = document.querySelector(`[data-field-id="${fieldId}"]`);
+      if (row) {
+        row.style.transition = 'all 0.3s ease';
+        row.style.opacity = '0';
+        row.style.transform = 'translateX(100%)';
+        setTimeout(() => row.remove(), 300);
+      }
+    } else {
+      alert('خطا در حذف فیلد');
+    }
+  } catch (error) {
+    console.error('خطا:', error);
+    alert('خطا در حذف فیلد');
+  }
+}
+
+// تابع تغییر وضعیت فیلد
+async function toggleField(fieldId) {
+  try {
+    const response = await fetch(`/api/custom-fields/${fieldId}/toggle`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const badge = document.querySelector(`[data-field-id="${fieldId}"] .badge`);
+      if (badge) {
+        if (data.is_active) {
+          badge.className = 'badge bg-success';
+          badge.textContent = 'فعال';
+        } else {
+          badge.className = 'badge bg-danger';
+          badge.textContent = 'غیرفعال';
+        }
+      }
+    } else {
+      alert('خطا در تغییر وضعیت فیلد');
+    }
+  } catch (error) {
+    console.error('خطا:', error);
+    alert('خطا در تغییر وضعیت فیلد');
+  }
+}
+</script>
+{% endblock %}

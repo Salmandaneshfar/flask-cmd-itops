@@ -1,37 +1,189 @@
-{% extends "base.html" %}
-{% block title %}مدیریت سرورها{% endblock %}
-{% set page_title = "مدیریت سرورها" %}
+{% extends 'base.html' %}
+{% block page_title %}مدیریت سرورها{% endblock %}
 {% block content %}
-  <form method="POST" class="mb-4">
-    <input name="name" class="form-control mb-2" placeholder="نام سرور" required>
-    <input name="ip_address" class="form-control mb-2" placeholder="آدرس IP" required>
-    <input name="os_type" class="form-control mb-2" placeholder="نوع سیستم‌عامل" required>
-    <select name="status" class="form-select mb-2" required>
-      <option value="فعال">فعال</option>
-      <option value="غیرفعال">غیرفعال</option>
-      <option value="در حال بررسی">در حال بررسی</option>
-    </select>
-    <button type="submit" class="btn btn-primary">ذخیره</button>
-  </form>
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5><i class="fas fa-server"></i> مدیریت سرورها</h5>
+  <a href="{{ url_for('add_server') }}" class="btn btn-primary">
+    <i class="fas fa-plus"></i> سرور جدید
+  </a>
+</div>
 
-  <table class="table table-bordered table-striped">
-    <thead class="table-light">
-      <tr>
-        <th>نام</th>
-        <th>IP</th>
-        <th>سیستم‌عامل</th>
-        <th>وضعیت</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for server in servers %}
-      <tr>
-        <td>{{ server.name }}</td>
-        <td>{{ server.ip_address }}</td>
-        <td>{{ server.os_type }}</td>
-        <td>{{ server.status }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<!-- فیلتر و جستجو -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="GET" class="row g-3">
+      <div class="col-md-4">
+        <input type="text" name="query" class="form-control" placeholder="جستجو در نام سرور یا توضیحات..." value="{{ request.args.get('query', '') }}">
+      </div>
+      <div class="col-md-3">
+        <select name="os_type" class="form-select">
+          <option value="">همه سیستم‌عامل‌ها</option>
+          <option value="windows" {% if request.args.get('os_type') == 'windows' %}selected{% endif %}>Windows</option>
+          <option value="linux" {% if request.args.get('os_type') == 'linux' %}selected{% endif %}>Linux</option>
+          <option value="macos" {% if request.args.get('os_type') == 'macos' %}selected{% endif %}>macOS</option>
+          <option value="other" {% if request.args.get('os_type') == 'other' %}selected{% endif %}>سایر</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select name="status" class="form-select">
+          <option value="">همه وضعیت‌ها</option>
+          <option value="active" {% if request.args.get('status') == 'active' %}selected{% endif %}>فعال</option>
+          <option value="inactive" {% if request.args.get('status') == 'inactive' %}selected{% endif %}>غیرفعال</option>
+          <option value="maintenance" {% if request.args.get('status') == 'maintenance' %}selected{% endif %}>در حال تعمیر</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-outline-primary w-100">
+          <i class="fas fa-search"></i> جستجو
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    {% if servers.items %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>نام سرور</th>
+              <th>آدرس IP</th>
+              <th>سیستم عامل</th>
+              <th>وضعیت</th>
+              <th>تاریخ ایجاد</th>
+              {% if custom_fields_structure %}
+                {% for field_name, field_data in custom_fields_structure %}
+                  <th>{{ field_data.label }}</th>
+                {% endfor %}
+              {% endif %}
+              <th>عملیات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for server in servers.items %}
+              <tr>
+                <td>
+                  <h6 class="mb-1">{{ server.name }}</h6>
+                  {% if server.description %}
+                    <small class="text-muted">{{ server.description[:50] }}{% if server.description|length > 50 %}...{% endif %}</small>
+                  {% endif %}
+                </td>
+                <td>
+                  <code>{{ server.ip_address }}</code>
+                </td>
+                <td>
+                  <span class="badge bg-info">{{ server.os_type }}</span>
+                </td>
+                <td>
+                  <span class="badge bg-{{ 'success' if server.status == 'active' else 'danger' if server.status == 'inactive' else 'warning' }}">
+                    {{ server.status }}
+                  </span>
+                </td>
+                <td>{{ server.created_at.strftime('%Y/%m/%d') }}</td>
+                {% if custom_fields_data and custom_fields_data[server.id] %}
+                  {% for field_name, field_data in custom_fields_data[server.id].items() %}
+                    <td>
+                      {% if field_data.value %}
+                        {% if field_data.field_type == 'checkbox' %}
+                          <span class="badge bg-{{ 'success' if field_data.value == '1' else 'secondary' }}">
+                            {{ 'بله' if field_data.value == '1' else 'خیر' }}
+                          </span>
+                        {% elif field_data.field_type == 'date' %}
+                          {{ field_data.value }}
+                        {% elif field_data.field_type == 'url' %}
+                          <a href="{{ field_data.value }}" target="_blank" class="text-decoration-none">
+                            <i class="fas fa-external-link-alt"></i> لینک
+                          </a>
+                        {% elif field_data.field_type == 'email' %}
+                          <a href="mailto:{{ field_data.value }}" class="text-decoration-none">
+                            {{ field_data.value }}
+                          </a>
+                        {% else %}
+                          {{ field_data.value }}
+                        {% endif %}
+                      {% else %}
+                        <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                  {% endfor %}
+                {% endif %}
+                <td>
+                  <div class="btn-group" role="group">
+                    <a href="{{ url_for('edit_server', id=server.id) }}" class="btn btn-sm btn-outline-primary" title="ویرایش">
+                      <i class="fas fa-edit"></i>
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteServer({{ server.id }})" title="حذف">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- Pagination -->
+      {% if servers.pages > 1 %}
+        <nav aria-label="صفحه‌بندی">
+          <ul class="pagination justify-content-center">
+            {% if servers.has_prev %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('servers', page=servers.prev_num) }}">قبلی</a>
+              </li>
+            {% endif %}
+            
+            {% for page_num in servers.iter_pages() %}
+              {% if page_num %}
+                {% if page_num != servers.page %}
+                  <li class="page-item">
+                    <a class="page-link" href="{{ url_for('servers', page=page_num) }}">{{ page_num }}</a>
+                  </li>
+                {% else %}
+                  <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                  </li>
+                {% endif %}
+              {% else %}
+                <li class="page-item disabled">
+                  <span class="page-link">...</span>
+                </li>
+              {% endif %}
+            {% endfor %}
+            
+            {% if servers.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('servers', page=servers.next_num) }}">بعدی</a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      {% endif %}
+    {% else %}
+      <div class="text-center py-5">
+        <i class="fas fa-server fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">هیچ سروری یافت نشد</h5>
+        <a href="{{ url_for('add_server') }}" class="btn btn-primary mt-3">
+          <i class="fas fa-plus"></i> اولین سرور را اضافه کنید
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deleteServer(serverId) {
+  if (confirm('آیا مطمئن هستید که می‌خواهید این سرور را حذف کنید؟')) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/servers/delete/${serverId}`;
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+</script>
 {% endblock %}

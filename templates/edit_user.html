@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block page_title %}ویرایش کاربر{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-user-edit"></i> ویرایش کاربر: {{ user.username }}</h5>
+      </div>
+      <div class="card-body">
+        <form method="POST">
+          {{ form.hidden_tag() }}
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              {{ form.username.label(class="form-label") }}
+              {{ form.username(class="form-control") }}
+              {% if form.username.errors %}
+                <div class="text-danger">
+                  {% for error in form.username.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              {{ form.email.label(class="form-label") }}
+              {{ form.email(class="form-control") }}
+              {% if form.email.errors %}
+                <div class="text-danger">
+                  {% for error in form.email.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              {{ form.role.label(class="form-label") }}
+              {{ form.role(class="form-select") }}
+              {% if form.role.errors %}
+                <div class="text-danger">
+                  {% for error in form.role.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6 mb-3 d-flex align-items-end">
+              <div class="form-check">
+                {{ form.is_active(class="form-check-input") }}
+                {{ form.is_active.label(class="form-check-label") }}
+              </div>
+            </div>
+          </div>
+          
+          <!-- فیلدهای داینامیک -->
+          <div id="dynamicFieldsContainer"></div>
+          
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> ذخیره تغییرات
+            </button>
+            <a href="{{ url_for('users') }}" class="btn btn-secondary">
+              <i class="fas fa-arrow-right"></i> بازگشت
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dynamic-fields.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const dynamicFieldsManager = new DynamicFieldsManager('User', 'dynamicFieldsContainer');
+  dynamicFieldsManager.setCurrentRecordId({{ user.id }});
+  // بارگذاری مقادیر موجود بعد از ایجاد فیلدها
+  setTimeout(() => {
+    loadExistingValues('User', {{ user.id }});
+  }, 500);
+});
+</script>
+{% endblock %}

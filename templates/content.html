@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% block page_title %}مدیریت محتوا{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5><i class="fas fa-file-alt"></i> مدیریت محتوا</h5>
+  <a href="{{ url_for('add_content') }}" class="btn btn-primary">
+    <i class="fas fa-plus"></i> محتوای جدید
+  </a>
+</div>
+
+<!-- فیلتر و جستجو -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="GET" class="row g-3">
+      <div class="col-md-4">
+        <input type="text" name="query" class="form-control" placeholder="جستجو در عنوان یا محتوا..." value="{{ request.args.get('query', '') }}">
+      </div>
+      <div class="col-md-3">
+        <select name="content_type" class="form-select">
+          <option value="">همه انواع</option>
+          <option value="page" {% if request.args.get('content_type') == 'page' %}selected{% endif %}>صفحه</option>
+          <option value="post" {% if request.args.get('content_type') == 'post' %}selected{% endif %}>مطلب</option>
+          <option value="article" {% if request.args.get('content_type') == 'article' %}selected{% endif %}>مقاله</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select name="status" class="form-select">
+          <option value="">همه وضعیت‌ها</option>
+          <option value="draft" {% if request.args.get('status') == 'draft' %}selected{% endif %}>پیش‌نویس</option>
+          <option value="published" {% if request.args.get('status') == 'published' %}selected{% endif %}>منتشر شده</option>
+          <option value="archived" {% if request.args.get('status') == 'archived' %}selected{% endif %}>آرشیو شده</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-outline-primary w-100">
+          <i class="fas fa-search"></i> جستجو
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    {% if content.items %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>عنوان</th>
+              <th>نوع</th>
+              <th>وضعیت</th>
+              <th>نویسنده</th>
+              <th>تاریخ ایجاد</th>
+              <th>عملیات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in content.items %}
+              <tr>
+                <td>
+                  <h6 class="mb-1">{{ item.title }}</h6>
+                  <small class="text-muted">{{ item.slug }}</small>
+                </td>
+                <td>
+                  <span class="badge bg-{{ 'primary' if item.content_type == 'page' else 'success' if item.content_type == 'post' else 'info' }}">
+                    {{ item.content_type }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge bg-{{ 'success' if item.status == 'published' else 'warning' if item.status == 'draft' else 'secondary' }}">
+                    {{ item.status }}
+                  </span>
+                </td>
+                <td>{{ item.author.username }}</td>
+                <td>{{ item.created_at.strftime('%Y/%m/%d') }}</td>
+                <td>
+                  <a href="#" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-edit"></i>
+                  </a>
+                  <a href="#" class="btn btn-sm btn-outline-danger">
+                    <i class="fas fa-trash"></i>
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- Pagination -->
+      {% if content.pages > 1 %}
+        <nav aria-label="صفحه‌بندی">
+          <ul class="pagination justify-content-center">
+            {% if content.has_prev %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('content', page=content.prev_num) }}">قبلی</a>
+              </li>
+            {% endif %}
+            
+            {% for page_num in content.iter_pages() %}
+              {% if page_num %}
+                {% if page_num != content.page %}
+                  <li class="page-item">
+                    <a class="page-link" href="{{ url_for('content', page=page_num) }}">{{ page_num }}</a>
+                  </li>
+                {% else %}
+                  <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                  </li>
+                {% endif %}
+              {% else %}
+                <li class="page-item disabled">
+                  <span class="page-link">...</span>
+                </li>
+              {% endif %}
+            {% endfor %}
+            
+            {% if content.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('content', page=content.next_num) }}">بعدی</a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      {% endif %}
+    {% else %}
+      <div class="text-center py-5">
+        <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">هیچ محتوایی یافت نشد</h5>
+        <a href="{{ url_for('add_content') }}" class="btn btn-primary mt-3">
+          <i class="fas fa-plus"></i> اولین محتوا را اضافه کنید
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+{% block page_title %}ویرایش بکاپ{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-edit"></i> ویرایش بکاپ: {{ backup.name }}</h5>
+      </div>
+      <div class="card-body">
+        <form method="POST">
+          {{ form.hidden_tag() }}
+          
+          <div class="mb-3">
+            {{ form.name.label(class="form-label") }}
+            {{ form.name(class="form-control") }}
+            {% if form.name.errors %}
+              <div class="text-danger">
+                {% for error in form.name.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          
+          <div class="mb-3">
+            {{ form.file_path.label(class="form-label") }}
+            {{ form.file_path(class="form-control") }}
+            {% if form.file_path.errors %}
+              <div class="text-danger">
+                {% for error in form.file_path.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              {{ form.file_size.label(class="form-label") }}
+              {{ form.file_size(class="form-control", type="number") }}
+              {% if form.file_size.errors %}
+                <div class="text-danger">
+                  {% for error in form.file_size.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              {{ form.backup_type.label(class="form-label") }}
+              {{ form.backup_type(class="form-select") }}
+              {% if form.backup_type.errors %}
+                <div class="text-danger">
+                  {% for error in form.backup_type.errors %}
+                    <small>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            {{ form.status.label(class="form-label") }}
+            {{ form.status(class="form-select") }}
+            {% if form.status.errors %}
+              <div class="text-danger">
+                {% for error in form.status.errors %}
+                  <small>{{ error }}</small>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> ذخیره تغییرات
+            </button>
+            <a href="{{ url_for('backups') }}" class="btn btn-secondary">
+              <i class="fas fa-arrow-right"></i> بازگشت
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+    
+    <!-- اطلاعات بکاپ -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="fas fa-info-circle"></i> اطلاعات بکاپ</h6>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6">
+            <p><strong>تاریخ ایجاد:</strong> {{ backup.created_at.strftime('%Y/%m/%d %H:%M') }}</p>
+            <p><strong>حجم فایل:</strong> 
+              {% if backup.file_size %}
+                {{ "%.2f"|format(backup.file_size / 1024 / 1024) }} MB
+              {% else %}
+                نامشخص
+              {% endif %}
+            </p>
+          </div>
+          <div class="col-md-6">
+            <p><strong>تاریخ تکمیل:</strong> 
+              {{ backup.completed_at.strftime('%Y/%m/%d %H:%M') if backup.completed_at else 'ندارد' }}
+            </p>
+            <p><strong>وضعیت:</strong> 
+              <span class="badge bg-{{ 'success' if backup.status == 'completed' else 'warning' if backup.status == 'in_progress' else 'danger' if backup.status == 'failed' else 'secondary' }}">
+                {{ backup.status }}
+              </span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// اعتبارسنجی مسیر فایل
+document.querySelector('form').addEventListener('submit', function(e) {
+  const filePath = document.querySelector('input[name="file_path"]').value;
+  
+  if (filePath && !filePath.startsWith('/')) {
+    e.preventDefault();
+    alert('مسیر فایل باید با / شروع شود.');
+    return;
+  }
+});
+
+// بروزرسانی خودکار تاریخ تکمیل
+document.querySelector('select[name="status"]').addEventListener('change', function() {
+  if (this.value === 'completed') {
+    const now = new Date();
+    const dateTime = now.getFullYear() + '-' + 
+                    String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(now.getDate()).padStart(2, '0') + 'T' + 
+                    String(now.getHours()).padStart(2, '0') + ':' + 
+                    String(now.getMinutes()).padStart(2, '0');
+    console.log('Backup completed at:', dateTime);
+  }
+});
+</script>
+{% endblock %}
