@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% block page_title %}بوکمارک‌ها{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5><i class="fas fa-bookmark"></i> بوکمارک‌ها</h5>
+  <a href="{{ url_for('add_bookmark') }}" class="btn btn-primary">
+    <i class="fas fa-plus"></i> بوکمارک جدید
+  </a>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="GET" class="row g-3">
+      <div class="col-md-6">
+        <input type="text" name="query" class="form-control" placeholder="جستجو در نام/آدرس/توضیحات..." value="{{ query }}">
+      </div>
+      <div class="col-md-3 form-check mt-2">
+        <input class="form-check-input" type="checkbox" name="fav" value="1" id="fav" {% if only_fav %}checked{% endif %}>
+        <label class="form-check-label" for="fav">فقط علاقه‌مندی‌ها</label>
+      </div>
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-outline-primary w-100"><i class="fas fa-search"></i> جستجو</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    {% if bookmarks.items %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>نام</th>
+              <th>آدرس</th>
+              <th>پورت</th>
+              <th>لینک</th>
+              <th>علاقه‌مندی</th>
+              <th>آخرین تغییر</th>
+              <th>عملیات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for b in bookmarks.items %}
+              <tr>
+                <td>{{ b.name }}</td>
+                <td>{{ b.address or '-' }}</td>
+                <td>{{ b.port or '-' }}</td>
+                <td>
+                  {% if b.computed_url() %}
+                    <a href="{{ b.computed_url() }}" target="_blank" class="text-decoration-none"><i class="fas fa-external-link-alt"></i> باز کردن</a>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if b.is_favorite %}
+                    <i class="fas fa-star text-warning"></i>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                <td>{{ b.updated_at.strftime('%Y/%m/%d %H:%M') if b.updated_at else '-' }}</td>
+                <td>
+                  <div class="btn-group">
+                    <a href="{{ url_for('edit_bookmark', id=b.id) }}" class="btn btn-sm btn-outline-warning"><i class="fas fa-edit"></i></a>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteBookmark({{ b.id }})"><i class="fas fa-trash"></i></button>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if bookmarks.pages > 1 %}
+      <nav aria-label="صفحه‌بندی">
+        <ul class="pagination justify-content-center">
+          {% if bookmarks.has_prev %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('bookmarks', page=bookmarks.prev_num, query=query, fav=1 if only_fav else None) }}">قبلی</a></li>
+          {% endif %}
+          {% for p in bookmarks.iter_pages() %}
+            {% if p %}
+              <li class="page-item {% if p == bookmarks.page %}active{% endif %}"><a class="page-link" href="{{ url_for('bookmarks', page=p, query=query, fav=1 if only_fav else None) }}">{{ p }}</a></li>
+            {% else %}
+              <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+          {% endfor %}
+          {% if bookmarks.has_next %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('bookmarks', page=bookmarks.next_num, query=query, fav=1 if only_fav else None) }}">بعدی</a></li>
+          {% endif %}
+        </ul>
+      </nav>
+      {% endif %}
+    {% else %}
+      <div class="text-center py-5">
+        <i class="fas fa-bookmark fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">هیچ بوکمارکی یافت نشد</h5>
+        <a href="{{ url_for('add_bookmark') }}" class="btn btn-primary mt-3"><i class="fas fa-plus"></i> اضافه کردن</a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deleteBookmark(id){
+  if(confirm('حذف بوکمارک؟')){
+    const f=document.createElement('form');
+    f.method='POST';
+    f.action=`/bookmarks/delete/${id}`;
+    document.body.appendChild(f);
+    f.submit();
+  }
+}
+</script>
+{% endblock %}

@@ -12,11 +12,11 @@ import redis
 
 from config import config
 from sqlalchemy import or_, text
-from models import db, User, Server, Task, Content, Backup, CustomField, CustomFieldValue, SecurityProject, Notification, Credential
+from models import db, User, Server, Task, Content, Backup, CustomField, CustomFieldValue, SecurityProject, Notification, Credential, Bookmark
 from forms import (LoginForm, UserForm, EditUserForm, ChangePasswordForm, 
                   ServerForm, TaskForm, ContentForm, BackupForm, SearchForm,
                   CustomFieldForm, CustomFieldEditForm, SecurityProjectForm, SecurityProjectEditForm,
-                  CredentialForm, CredentialEditForm, CredentialSearchForm)
+                  CredentialForm, CredentialEditForm, CredentialSearchForm, BookmarkForm, BookmarkEditForm)
 from logging_config import setup_logging, security_logger
 
 def create_app(config_name='default'):
@@ -534,6 +534,7 @@ def create_app(config_name='default'):
     
     @app.route('/tasks/delete/<int:id>', methods=['POST'])
     @login_required
+    @csrf.exempt
     def delete_task(id):
         task = Task.query.get_or_404(id)
         db.session.delete(task)
@@ -1020,6 +1021,7 @@ def create_app(config_name='default'):
     # API routes for AJAX
     @app.route('/api/task/<int:id>/status', methods=['POST'])
     @login_required
+    @csrf.exempt
     def update_task_status(id):
         task = Task.query.get_or_404(id)
         new_status = request.json.get('status')
@@ -1060,6 +1062,82 @@ def create_app(config_name='default'):
         Notification.query.filter_by(user_id=current_user.id, is_read=False).update({'is_read': True, 'read_at': datetime.utcnow()})
         db.session.commit()
         return jsonify({'success': True})
+
+    # Bookmarks
+    @app.route('/bookmarks')
+    @login_required
+    def bookmarks():
+        page = request.args.get('page', 1, type=int)
+        query = request.args.get('query', '')
+        only_fav = request.args.get('fav', '') == '1'
+
+        bookmarks_query = Bookmark.query.filter_by(created_by=current_user.id)
+        if query:
+            bookmarks_query = bookmarks_query.filter(
+                Bookmark.name.contains(query) | Bookmark.address.contains(query) | Bookmark.description.contains(query)
+            )
+        if only_fav:
+            bookmarks_query = bookmarks_query.filter_by(is_favorite=True)
+
+        bookmarks_page = bookmarks_query.order_by(Bookmark.is_favorite.desc(), Bookmark.updated_at.desc()).paginate(page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
+        return render_template('bookmarks.html', bookmarks=bookmarks_page, query=query, only_fav=only_fav)
+
+    @app.route('/bookmarks/add', methods=['GET', 'POST'])
+    @login_required
+    def add_bookmark():
+        form = BookmarkForm()
+        if form.validate_on_submit():
+            # اگر neither url nor address ارائه نشده، خطا
+            if not form.url.data and not form.address.data:
+                flash('حداقل یکی از فیلدهای "آدرس/دامنه" یا "لینک کامل" را وارد کنید.', 'error')
+                return render_template('add_bookmark.html', form=form)
+
+            bookmark = Bookmark(
+                name=form.name.data,
+                address=form.address.data or None,
+                port=form.port.data if form.port.data else None,
+                url=form.url.data or None,
+                description=form.description.data or None,
+                is_favorite=form.is_favorite.data or False,
+                created_by=current_user.id
+            )
+            db.session.add(bookmark)
+            db.session.commit()
+            flash('بوکمارک با موفقیت اضافه شد.', 'success')
+            return redirect(url_for('bookmarks'))
+        return render_template('add_bookmark.html', form=form)
+
+    @app.route('/bookmarks/edit/<int:id>', methods=['GET', 'POST'])
+    @login_required
+    def edit_bookmark(id):
+        bookmark = Bookmark.query.filter_by(id=id, created_by=current_user.id).first_or_404()
+        form = BookmarkEditForm(obj=bookmark)
+        if form.validate_on_submit():
+            if not form.url.data and not form.address.data:
+                flash('حداقل یکی از فیلدهای "آدرس/دامنه" یا "لینک کامل" را وارد کنید.', 'error')
+                return render_template('edit_bookmark.html', form=form, bookmark=bookmark)
+
+            bookmark.name = form.name.data
+            bookmark.address = form.address.data or None
+            bookmark.port = form.port.data if form.port.data else None
+            bookmark.url = form.url.data or None
+            bookmark.description = form.description.data or None
+            bookmark.is_favorite = form.is_favorite.data or False
+            bookmark.updated_at = datetime.utcnow()
+            db.session.commit()
+            flash('بوکمارک با موفقیت ویرایش شد.', 'success')
+            return redirect(url_for('bookmarks'))
+        return render_template('edit_bookmark.html', form=form, bookmark=bookmark)
+
+    @app.route('/bookmarks/delete/<int:id>', methods=['POST'])
+    @login_required
+    @csrf.exempt
+    def delete_bookmark(id):
+        bookmark = Bookmark.query.filter_by(id=id, created_by=current_user.id).first_or_404()
+        db.session.delete(bookmark)
+        db.session.commit()
+        flash('بوکمارک حذف شد.', 'success')
+        return redirect(url_for('bookmarks'))
     
     # Credential Management Routes
     @app.route('/credentials')

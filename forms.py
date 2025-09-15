@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, PasswordField, SelectField, DateTimeField, FileField, BooleanField, SubmitField
-from wtforms.validators import DataRequired, Length, Email, EqualTo, Optional, URL
+from wtforms import StringField, TextAreaField, PasswordField, SelectField, DateTimeField, FileField, BooleanField, SubmitField, IntegerField
+from wtforms.validators import DataRequired, Length, Email, EqualTo, Optional, URL, NumberRange
 from wtforms.widgets import TextArea
 
 class LoginForm(FlaskForm):
@@ -292,3 +292,23 @@ class CredentialSearchForm(FlaskForm):
     ], validators=[Optional()])
     tags = StringField('برچسب', validators=[Optional()])
     submit = SubmitField('جستجو')
+
+
+class BookmarkForm(FlaskForm):
+    name = StringField('نام سرویس/نشانه', validators=[DataRequired(), Length(min=2, max=200)])
+    address = StringField('آدرس یا دامنه/IP', validators=[Optional(), Length(max=500)])
+    port = IntegerField('پورت', validators=[Optional(), NumberRange(min=1, max=65535)])
+    url = StringField('لینک کامل (اختیاری)', validators=[Optional(), URL()])
+    description = TextAreaField('توضیحات', validators=[Optional()])
+    is_favorite = BooleanField('علاقه‌مندی')
+    submit = SubmitField('ذخیره')
+
+
+class BookmarkEditForm(FlaskForm):
+    name = StringField('نام سرویس/نشانه', validators=[DataRequired(), Length(min=2, max=200)])
+    address = StringField('آدرس یا دامنه/IP', validators=[Optional(), Length(max=500)])
+    port = IntegerField('پورت', validators=[Optional(), NumberRange(min=1, max=65535)])
+    url = StringField('لینک کامل (اختیاری)', validators=[Optional(), URL()])
+    description = TextAreaField('توضیحات', validators=[Optional()])
+    is_favorite = BooleanField('علاقه‌مندی')
+    submit = SubmitField('ذخیره')

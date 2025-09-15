@@ -1,5 +1,5 @@
-# استفاده از Python 3.11 slim image
-FROM python:3.11-slim
+# استفاده از Python 3.11 slim روی Debian Bookworm (پایدارتر از trixie)
+FROM python:3.11-slim-bookworm
 
 # تنظیم متغیرهای محیطی
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -10,12 +10,20 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # ایجاد کاربر غیر root برای امنیت
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# نصب وابستگی‌های سیستم
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# نصب وابستگی‌های سیستم با منطق retry برای پایدارسازی build
+RUN set -eux; \
+    echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80retries; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates; \
+    update-ca-certificates; \
+    for i in 1 2 3 4 5; do \
+        apt-get update && \
+        apt-get install -y --no-install-recommends \
+            build-essential \
+            libpq-dev \
+        && break || sleep 5; \
+    done; \
+    rm -rf /var/lib/apt/lists/*
 
 # تنظیم دایرکتوری کار
 WORKDIR /app

@@ -222,3 +222,31 @@ class Credential(db.Model):
     
     def __repr__(self):
         return f'<Credential {self.name}>'
+
+
+class Bookmark(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)  # نام سرویس/نشانه
+    address = db.Column(db.String(500), nullable=False)  # آدرس یا دامنه یا IP
+    port = db.Column(db.Integer)  # پورت سرویس (اختیاری)
+    url = db.Column(db.String(500))  # اگر لینک کامل دارید
+    description = db.Column(db.Text)  # توضیحات
+    is_favorite = db.Column(db.Boolean, default=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship('User', backref='bookmarks')
+
+    def computed_url(self):
+        """ساخت URL در صورت ارائه address و port، اگر url خالی بود"""
+        if self.url:
+            return self.url
+        if self.address and self.port:
+            return f"http://{self.address}:{self.port}"
+        if self.address:
+            return f"http://{self.address}"
+        return None
+
+    def __repr__(self):
+        return f'<Bookmark {self.name}>'
