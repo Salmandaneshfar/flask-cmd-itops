@@ -11,7 +11,11 @@ def setup_logging(app):
     # ایجاد دایرکتوری logs اگر وجود ندارد
     log_dir = os.path.dirname(Config.LOG_FILE)
     if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+        except Exception:
+            # در صورت عدم دسترسی، بعداً فقط به کنسول لاگ می‌کنیم
+            pass
     
     # تنظیم سطح logging
     log_level = getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO)
@@ -22,15 +26,19 @@ def setup_logging(app):
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     
-    # تنظیم handler برای فایل
-    file_handler = logging.handlers.RotatingFileHandler(
-        Config.LOG_FILE,
-        maxBytes=10*1024*1024,  # 10MB
-        backupCount=10,
-        encoding='utf-8'
-    )
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(log_level)
+    # تنظیم handler برای فایل (با fallback به کنسول در صورت خطا)
+    file_handler = None
+    try:
+        file_handler = logging.handlers.RotatingFileHandler(
+            Config.LOG_FILE,
+            maxBytes=10*1024*1024,  # 10MB
+            backupCount=10,
+            encoding='utf-8'
+        )
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(log_level)
+    except Exception:
+        file_handler = None
     
     # تنظیم handler برای console
     console_handler = logging.StreamHandler()
@@ -39,7 +47,8 @@ def setup_logging(app):
     
     # تنظیم logger اصلی
     app.logger.setLevel(log_level)
-    app.logger.addHandler(file_handler)
+    if file_handler:
+        app.logger.addHandler(file_handler)
     app.logger.addHandler(console_handler)
     
     # تنظیم logger برای SQLAlchemy
@@ -91,17 +100,28 @@ class SecurityLogger:
         self.logger = logging.getLogger('security')
         self.logger.setLevel(logging.INFO)
         
-        # تنظیم handler مخصوص امنیت
-        security_handler = logging.handlers.RotatingFileHandler(
-            'logs/security.log',
-            maxBytes=5*1024*1024,  # 5MB
-            backupCount=5,
-            encoding='utf-8'
-        )
-        security_handler.setFormatter(logging.Formatter(
-            '%(asctime)s - SECURITY - %(levelname)s - %(message)s'
-        ))
-        self.logger.addHandler(security_handler)
+        # تنظیم handler مخصوص امنیت (با fallback به کنسول)
+        security_handler = None
+        try:
+            # اطمینان از وجود دایرکتوری
+            os.makedirs('logs', exist_ok=True)
+            security_handler = logging.handlers.RotatingFileHandler(
+                'logs/security.log',
+                maxBytes=5*1024*1024,  # 5MB
+                backupCount=5,
+                encoding='utf-8'
+            )
+            security_handler.setFormatter(logging.Formatter(
+                '%(asctime)s - SECURITY - %(levelname)s - %(message)s'
+            ))
+            self.logger.addHandler(security_handler)
+        except Exception:
+            # اگر فایل قابل نوشتن نبود، روی کنسول لاگ می‌کنیم تا برنامه کرش نکند
+            console_handler = logging.StreamHandler()
+            console_handler.setFormatter(logging.Formatter(
+                '%(asctime)s - SECURITY - %(levelname)s - %(message)s'
+            ))
+            self.logger.addHandler(console_handler)
     
     def log_login_attempt(self, username, ip, success=True):
         """ثبت تلاش ورود"""

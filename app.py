@@ -32,10 +32,11 @@ def create_app(config_name='default'):
     # Initialize Cache
     cache = Cache(app)
     
-    # Initialize Rate Limiter
+    # Initialize Rate Limiter with Redis storage
     limiter = Limiter(
         key_func=get_remote_address,
-        default_limits=["200 per day", "50 per hour"]
+        default_limits=["200 per day", "50 per hour"],
+        storage_uri=app.config.get('RATELIMIT_STORAGE_URI')
     )
     limiter.init_app(app)
     
