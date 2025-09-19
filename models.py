@@ -351,19 +351,3 @@ class ActivityLog(db.Model):
         return f'<ActivityLog {self.action} by {self.username or self.user_id}>'
 
 
-class LookupItem(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    group = db.Column(db.String(50), nullable=False)  # e.g., department, office, vendor
-    key = db.Column(db.String(100), nullable=False)
-    label = db.Column(db.String(200), nullable=False)
-    order = db.Column(db.Integer, default=0)
-    is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    __table_args__ = (
-        db.UniqueConstraint('group', 'key', name='uq_lookup_group_key'),
-    )
-
-    def __repr__(self):
-        return f'<LookupItem {self.group}:{self.key}>'

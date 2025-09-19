@@ -12,7 +12,7 @@ import redis
 
 from config import config
 from sqlalchemy import or_, text
-from models import db, User, Server, Task, Content, Backup, CustomField, CustomFieldValue, SecurityProject, Notification, Credential, Bookmark, Attachment, ActivityLog, Person, LookupItem
+from models import db, User, Server, Task, Content, Backup, CustomField, CustomFieldValue, SecurityProject, Notification, Credential, Bookmark, Attachment, ActivityLog, Person
 from app_custom_fields import custom_fields_bp
 from forms import (LoginForm, UserForm, EditUserForm, ChangePasswordForm, 
                   ServerForm, TaskForm, ContentForm, BackupForm,
@@ -1127,59 +1127,6 @@ def create_app(config_name='default'):
         return render_template('bookmarks.html', bookmarks=bookmarks_page, query=query, only_fav=only_fav)
 
     # People (internal/external users of systems)
-    @app.route('/lookups')
-    @login_required
-    def lookups():
-        if current_user.role != 'admin':
-            flash('دسترسی غیرمجاز.', 'error')
-            return redirect(url_for('dashboard'))
-        group = request.args.get('group', 'department')
-        items = LookupItem.query.filter_by(group=group).order_by(LookupItem.order.asc(), LookupItem.label.asc()).all()
-        return render_template('lookups.html', group=group, items=items)
-
-    @app.route('/lookups/add', methods=['GET', 'POST'])
-    @login_required
-    def add_lookup():
-        if current_user.role != 'admin':
-            flash('دسترسی غیرمجاز.', 'error')
-            return redirect(url_for('dashboard'))
-        if request.method == 'POST':
-            group = request.form.get('group') or 'department'
-            key = request.form.get('key') or request.form.get('label')
-            label = request.form.get('label')
-            order = int(request.form.get('order') or 0)
-            if not label:
-                flash('برچسب الزامی است', 'error')
-                return redirect(url_for('lookups', group=group))
-            item = LookupItem(group=group, key=key, label=label, order=order, is_active=True)
-            db.session.add(item)
-            db.session.commit()
-            app.log_activity('create', 'LookupItem', item.id, 200, f'Add {group}:{label}')
-            return redirect(url_for('lookups', group=group))
-        return render_template('add_lookup.html')
-
-    @app.route('/lookups/<int:id>/toggle', methods=['POST'])
-    @login_required
-    def toggle_lookup(id):
-        if current_user.role != 'admin':
-            return jsonify({'success': False})
-        item = LookupItem.query.get_or_404(id)
-        item.is_active = not item.is_active
-        db.session.commit()
-        app.log_activity('update', 'LookupItem', item.id, 200, f'Toggle {item.group}:{item.label} -> {item.is_active}')
-        return jsonify({'success': True, 'is_active': item.is_active})
-
-    @app.route('/lookups/<int:id>/delete', methods=['POST'])
-    @login_required
-    def delete_lookup(id):
-        if current_user.role != 'admin':
-            return jsonify({'success': False})
-        item = LookupItem.query.get_or_404(id)
-        group = item.group
-        db.session.delete(item)
-        db.session.commit()
-        app.log_activity('delete', 'LookupItem', id, 200, f'Delete {group}:{item.label}')
-        return jsonify({'success': True})
 
     @app.route('/people')
     @login_required
