@@ -1171,6 +1171,32 @@ def create_app(config_name='default'):
         app.log_activity('update', 'LookupItem', item.id, 200, f'Toggle {item.group}:{item.label} -> {item.is_active}')
         return jsonify({'success': True, 'is_active': item.is_active})
 
+    @app.route('/lookups/<int:id>/edit', methods=['GET', 'POST'])
+    @login_required
+    def edit_lookup(id):
+        if current_user.role != 'admin':
+            flash('دسترسی غیرمجاز.', 'error')
+            return redirect(url_for('dashboard'))
+        
+        item = LookupItem.query.get_or_404(id)
+        
+        if request.method == 'POST':
+            item.group = request.form.get('group') or item.group
+            item.key = request.form.get('key') or request.form.get('label')
+            item.label = request.form.get('label')
+            item.order = int(request.form.get('order') or 0)
+            
+            if not item.label:
+                flash('برچسب الزامی است', 'error')
+                return redirect(url_for('edit_lookup', id=id))
+            
+            db.session.commit()
+            app.log_activity('update', 'LookupItem', item.id, 200, f'Edit {item.group}:{item.label}')
+            flash('آیتم با موفقیت ویرایش شد.', 'success')
+            return redirect(url_for('lookups', group=item.group))
+        
+        return render_template('edit_lookup.html', item=item)
+
     @app.route('/lookups/<int:id>/delete', methods=['POST'])
     @login_required
     def delete_lookup(id):

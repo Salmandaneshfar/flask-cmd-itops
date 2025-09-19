@@ -41,6 +41,7 @@
                   </span>
                 </td>
                 <td>
+                  <a href="{{ url_for('edit_lookup', id=item.id) }}" class="btn btn-sm btn-outline-warning">ویرایش</a>
                   <button class="btn btn-sm btn-outline-primary" onclick="toggleLookup({{ item.id }})">
                     {% if item.is_active %}غیرفعال{% else %}فعال{% endif %}
                   </button>
