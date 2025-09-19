@@ -1157,6 +1157,7 @@ def create_app(config_name='default'):
             db.session.add(item)
             db.session.commit()
             app.log_activity('create', 'LookupItem', item.id, 200, f'Add {group}:{label}')
+            flash('آیتم با موفقیت اضافه شد.', 'success')
             return redirect(url_for('lookups', group=group))
         return render_template('add_lookup.html')
 

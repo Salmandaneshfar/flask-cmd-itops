@@ -9,6 +9,7 @@
         </div>
         <div class="card-body">
           <form method="post">
+            {{ csrf_token() }}
             <div class="mb-3">
               <label for="group" class="form-label">گروه</label>
               <select name="group" id="group" class="form-select" required>
