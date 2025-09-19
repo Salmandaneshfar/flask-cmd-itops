@@ -89,19 +89,6 @@
             {% endif %}
           </div>
           
-          <!-- گزینه‌های انتخابی (فقط برای نوع select) -->
-          <div class="mb-3" id="optionsDiv" style="display: none;">
-            {{ form.options.label(class="form-label") }}
-            {{ form.options(class="form-control", rows="4", placeholder="هر خط یک گزینه\nمثال:\nگزینه 1\nگزینه 2\nگزینه 3") }}
-            {% if form.options.errors %}
-              <div class="text-danger">
-                {% for error in form.options.errors %}
-                  <small>{{ error }}</small>
-                {% endfor %}
-              </div>
-            {% endif %}
-            <small class="form-text text-muted">هر خط یک گزینه باشد</small>
-          </div>
           
           <div class="row">
             <div class="col-md-6 mb-3">
@@ -171,36 +158,5 @@
 
 {% block scripts %}
 <script>
-// نمایش/مخفی کردن گزینه‌های انتخابی
-document.getElementById('fieldType').addEventListener('change', function() {
-  const optionsDiv = document.getElementById('optionsDiv');
-  if (this.value === 'select') {
-    optionsDiv.style.display = 'block';
-    // فعال کردن فیلد گزینه‌ها
-    const optionsField = optionsDiv.querySelector('textarea');
-    if (optionsField) {
-      optionsField.disabled = false;
-      optionsField.readOnly = false;
-    }
-  } else {
-    optionsDiv.style.display = 'none';
-  }
-});
-
-// نمایش اولیه گزینه‌ها اگر نوع select باشد
-document.addEventListener('DOMContentLoaded', function() {
-  const fieldType = document.getElementById('fieldType');
-  const optionsDiv = document.getElementById('optionsDiv');
-  
-  if (fieldType.value === 'select') {
-    optionsDiv.style.display = 'block';
-    // فعال کردن فیلد گزینه‌ها
-    const optionsField = optionsDiv.querySelector('textarea');
-    if (optionsField) {
-      optionsField.disabled = false;
-      optionsField.readOnly = false;
-    }
-  }
-});
 </script>
 {% endblock %}

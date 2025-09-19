@@ -29,18 +29,6 @@ def create_test_fields():
                 'order': 1
             },
             {
-                'name': 'test_select_field',
-                'label': 'فیلد انتخابی تست',
-                'field_type': 'select',
-                'model_name': 'User',
-                'is_required': True,
-                'is_active': True,
-                'placeholder': '',
-                'help_text': 'یکی از گزینه‌ها را انتخاب کنید',
-                'order': 2,
-                'options': ['گزینه اول', 'گزینه دوم', 'گزینه سوم', 'گزینه چهارم']
-            },
-            {
                 'name': 'test_number_field',
                 'label': 'فیلد عددی تست',
                 'field_type': 'number',
@@ -99,26 +87,24 @@ def create_test_fields():
             {
                 'name': 'test_server_location',
                 'label': 'مکان سرور',
-                'field_type': 'select',
+                'field_type': 'text',
                 'model_name': 'Server',
                 'is_required': True,
                 'is_active': True,
-                'placeholder': '',
-                'help_text': 'مکان فیزیکی سرور را انتخاب کنید',
-                'order': 1,
-                'options': ['تهران', 'اصفهان', 'شیراز', 'مشهد', 'تبریز', 'کرج']
+                'placeholder': 'مکان فیزیکی سرور',
+                'help_text': 'مکان فیزیکی سرور را وارد کنید',
+                'order': 1
             },
             {
                 'name': 'test_server_priority',
                 'label': 'اولویت سرور',
-                'field_type': 'select',
+                'field_type': 'text',
                 'model_name': 'Server',
                 'is_required': True,
                 'is_active': True,
-                'placeholder': '',
+                'placeholder': 'اولویت سرور',
                 'help_text': 'اولویت سرور را تعیین کنید',
-                'order': 2,
-                'options': ['بسیار بالا', 'بالا', 'متوسط', 'پایین', 'بسیار پایین']
+                'order': 2
             },
             {
                 'name': 'test_server_notes',
@@ -148,9 +134,6 @@ def create_test_fields():
                 order=field_data['order']
             )
             
-            # تنظیم گزینه‌های انتخابی
-            if field_data['field_type'] == 'select' and 'options' in field_data:
-                field.set_options(field_data['options'])
             
             db.session.add(field)
             created_fields.append(field)

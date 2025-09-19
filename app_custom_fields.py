@@ -74,10 +74,6 @@ def add_field():
             order=int(form.order.data) if form.order.data else 0
         )
         
-        # پردازش گزینه‌های انتخابی
-        if form.options.data and form.field_type.data == 'select':
-            options_list = [opt.strip() for opt in form.options.data.split('\n') if opt.strip()]
-            field.set_options(options_list)
         
         try:
             db.session.add(field)
@@ -106,9 +102,6 @@ def edit_field(id):
     field = CustomField.query.get_or_404(id)
     form = CustomFieldEditForm(obj=field)
     
-    # نمایش گزینه‌های موجود
-    if field.field_type == 'select' and field.options:
-        form.options.data = '\n'.join(field.get_options())
     
     if form.validate_on_submit():
         field.label = form.label.data
@@ -119,15 +112,6 @@ def edit_field(id):
         field.help_text = form.help_text.data
         field.order = int(form.order.data) if form.order.data else 0
         
-        # پردازش گزینه‌های انتخابی
-        if form.field_type.data == 'select':
-            if form.options.data and form.options.data.strip():
-                options_list = [opt.strip() for opt in form.options.data.split('\n') if opt.strip()]
-                field.set_options(options_list)
-            else:
-                field.options = None
-        else:
-            field.options = None
         
         try:
             db.session.commit()
@@ -185,7 +169,6 @@ def get_fields_for_model(model_name):
             'is_required': field.is_required,
             'placeholder': field.placeholder,
             'help_text': field.help_text,
-            'options': field.get_options() if field.field_type == 'select' else None
         })
     
     return jsonify(result)

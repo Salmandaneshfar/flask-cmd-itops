@@ -187,7 +187,6 @@ class CustomFieldForm(FlaskForm):
         ('number', 'عدد'),
         ('email', 'ایمیل'),
         ('date', 'تاریخ'),
-        ('select', 'انتخاب از لیست'),
         ('textarea', 'متن طولانی'),
         ('checkbox', 'چک باکس'),
         ('url', 'لینک'),
@@ -211,7 +210,6 @@ class CustomFieldForm(FlaskForm):
     placeholder = StringField('متن راهنما', validators=[Optional(), Length(max=200)])
     help_text = TextAreaField('راهنمای اضافی', validators=[Optional()])
     order = StringField('ترتیب نمایش', validators=[Optional()], default='0')
-    options = TextAreaField('گزینه‌های انتخابی (هر خط یک گزینه)', validators=[Optional()])
     submit = SubmitField('ذخیره')
 
 class CustomFieldEditForm(FlaskForm):
@@ -221,7 +219,6 @@ class CustomFieldEditForm(FlaskForm):
         ('number', 'عدد'),
         ('email', 'ایمیل'),
         ('date', 'تاریخ'),
-        ('select', 'انتخاب از لیست'),
         ('textarea', 'متن طولانی'),
         ('checkbox', 'چک باکس'),
         ('url', 'لینک'),
@@ -232,7 +229,6 @@ class CustomFieldEditForm(FlaskForm):
     placeholder = StringField('متن راهنما', validators=[Optional(), Length(max=200)])
     help_text = TextAreaField('راهنمای اضافی', validators=[Optional()])
     order = StringField('ترتیب نمایش', validators=[Optional()])
-    options = TextAreaField('گزینه‌های انتخابی (هر خط یک گزینه)', validators=[Optional()], render_kw={'rows': 4, 'placeholder': 'هر خط یک گزینه\nمثال:\nگزینه 1\nگزینه 2\nگزینه 3'})
     submit = SubmitField('ذخیره')
 
 # فرم‌های مدیریت رمزها

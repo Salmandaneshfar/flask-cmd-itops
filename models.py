@@ -180,11 +180,10 @@ class CustomField(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     label = db.Column(db.String(200), nullable=False)
-    field_type = db.Column(db.String(50), nullable=False)  # text, number, email, date, select, textarea, checkbox
+    field_type = db.Column(db.String(50), nullable=False)  # text, number, email, date, textarea, checkbox, url, phone
     model_name = db.Column(db.String(50), nullable=False)  # User, Server, Task, Content, Backup
     is_required = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
-    options = db.Column(db.Text)  # JSON string for select options
     placeholder = db.Column(db.String(200))
     help_text = db.Column(db.Text)
     order = db.Column(db.Integer, default=0)
@@ -194,23 +193,6 @@ class CustomField(db.Model):
     def __repr__(self):
         return f'<CustomField {self.name}>'
     
-    def get_options(self):
-        """تبدیل options از JSON string به list"""
-        if self.options:
-            try:
-                import json
-                return json.loads(self.options)
-            except:
-                return []
-        return []
-    
-    def set_options(self, options_list):
-        """تبدیل options از list به JSON string"""
-        if options_list:
-            import json
-            self.options = json.dumps(options_list)
-        else:
-            self.options = None
 
 class CustomFieldValue(db.Model):
     id = db.Column(db.Integer, primary_key=True)

@@ -142,8 +142,6 @@ class DynamicFieldsManagerV2 {
             case 'date':
                 return this.createDateInput(field);
             
-            case 'select':
-                return this.createSelectInput(field);
             
             case 'textarea':
                 return this.createTextareaInput(field);
@@ -203,44 +201,6 @@ class DynamicFieldsManagerV2 {
         return input;
     }
 
-    createSelectInput(field) {
-        console.log(`🔽 Creating select input for field: ${field.name}`);
-        console.log(`   Options:`, field.options);
-        
-        const select = document.createElement('select');
-        select.className = 'form-select';
-        select.id = `custom_field_${field.id}`;
-        select.name = `custom_field_${field.id}`;
-        select.required = field.is_required;
-        select.style.direction = 'rtl';
-        select.style.textAlign = 'right';
-
-        // Default option
-        const defaultOption = document.createElement('option');
-        defaultOption.value = '';
-        defaultOption.textContent = 'انتخاب کنید...';
-        defaultOption.disabled = true;
-        defaultOption.selected = true;
-        select.appendChild(defaultOption);
-
-        // Add options
-        if (field.options && Array.isArray(field.options)) {
-            field.options.forEach(option => {
-                if (option && option.trim()) {
-                    const optionElement = document.createElement('option');
-                    optionElement.value = option.trim();
-                    optionElement.textContent = option.trim();
-                    select.appendChild(optionElement);
-                    console.log(`   ✅ Added option: "${option.trim()}"`);
-                }
-            });
-        } else {
-            console.warn(`   ⚠️ No options found for select field: ${field.name}`);
-        }
-
-        console.log(`   📊 Total options added: ${select.children.length - 1}`);
-        return select;
-    }
 
     createTextareaInput(field) {
         const textarea = document.createElement('textarea');

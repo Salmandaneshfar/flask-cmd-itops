@@ -85,16 +85,6 @@ class DynamicFieldsManager {
                            ${field.is_required ? 'required' : ''}>
                 `;
                 break;
-            case 'select':
-                fieldHtml += `
-                    <select class="form-select" 
-                            name="custom_field_${field.id}"
-                            ${field.is_required ? 'required' : ''}>
-                        <option value="">انتخاب کنید...</option>
-                        ${field.options ? field.options.map(option => `<option value="${option}">${option}</option>`).join('') : ''}
-                    </select>
-                `;
-                break;
             case 'textarea':
                 fieldHtml += `
                     <textarea class="form-control" 

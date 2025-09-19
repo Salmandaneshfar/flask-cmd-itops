@@ -26,15 +26,6 @@ def test_api_endpoints():
                 data = response.json()
                 print(f"   ✅ موفق - {len(data)} فیلد یافت شد")
                 
-                # Check for select fields
-                select_fields = [f for f in data if f.get('field_type') == 'select']
-                if select_fields:
-                    print(f"   🔽 {len(select_fields)} فیلد انتخابی:")
-                    for field in select_fields:
-                        options = field.get('options', [])
-                        print(f"      - {field['name']}: {len(options)} گزینه")
-                        if options:
-                            print(f"        گزینه‌ها: {', '.join(options[:3])}{'...' if len(options) > 3 else ''}")
             else:
                 print(f"   ❌ خطا - وضعیت: {response.status_code}")
                 
@@ -151,7 +142,6 @@ def main():
     print("   2. تست API برای مدل‌های مختلف")
     print("   3. تست اعتبارسنجی فیلدها")
     print("   4. تست ذخیره مقادیر")
-    print("   5. تست فیلدهای انتخابی (dropdown)")
     print("   6. تست فیلدهای فارسی")
 
 if __name__ == '__main__':
