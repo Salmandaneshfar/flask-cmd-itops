@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">مدیریت لیست‌های کرکره‌ای</h5>
+    <a href="{{ url_for('add_lookup') }}" class="btn btn-primary btn-sm">افزودن آیتم</a>
+  </div>
+
+  <form class="mb-3" method="get">
+    <label class="form-label">گروه</label>
+    <select name="group" class="form-select" onchange="this.form.submit()">
+      <option value="department" {% if group=='department' %}selected{% endif %}>واحد/اداره</option>
+      <option value="office" {% if group=='office' %}selected{% endif %}>سازمان/اداره</option>
+      <option value="vendor" {% if group=='vendor' %}selected{% endif %}>سازنده/فروشنده</option>
+    </select>
+  </form>
+
+  <div class="card">
+    <div class="card-body">
+      {% if items %}
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>کلید</th>
+                <th>برچسب</th>
+                <th>ترتیب</th>
+                <th>وضعیت</th>
+                <th>عملیات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in items %}
+              <tr>
+                <td>{{ item.key }}</td>
+                <td>{{ item.label }}</td>
+                <td>{{ item.order }}</td>
+                <td>
+                  <span class="badge {% if item.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                    {% if item.is_active %}فعال{% else %}غیرفعال{% endif %}
+                  </span>
+                </td>
+                <td>
+                  <button class="btn btn-sm btn-outline-primary" onclick="toggleLookup({{ item.id }})">
+                    {% if item.is_active %}غیرفعال{% else %}فعال{% endif %}
+                  </button>
+                  <button class="btn btn-sm btn-outline-danger" onclick="deleteLookup({{ item.id }})">حذف</button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-center py-4">
+          <p class="text-muted">هیچ آیتمی یافت نشد.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleLookup(id) {
+  fetch(`/lookups/${id}/toggle`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector('meta[name=csrf-token]').getAttribute('content')
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert('خطا در تغییر وضعیت');
+    }
+  });
+}
+
+function deleteLookup(id) {
+  if (confirm('آیا مطمئن هستید؟')) {
+    fetch(`/lookups/${id}/delete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name=csrf-token]').getAttribute('content')
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        location.reload();
+      } else {
+        alert('خطا در حذف');
+      }
+    });
+  }
+}
+</script>
+{% endblock %}

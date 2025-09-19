@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row justify-content-center">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="mb-0">افزودن آیتم جدید</h5>
+        </div>
+        <div class="card-body">
+          <form method="post">
+            <div class="mb-3">
+              <label for="group" class="form-label">گروه</label>
+              <select name="group" id="group" class="form-select" required>
+                <option value="department">واحد/اداره</option>
+                <option value="office">سازمان/اداره</option>
+                <option value="vendor">سازنده/فروشنده</option>
+              </select>
+            </div>
+            
+            <div class="mb-3">
+              <label for="key" class="form-label">کلید</label>
+              <input type="text" name="key" id="key" class="form-control" placeholder="کلید منحصر به فرد">
+              <div class="form-text">اگر خالی باشد، از برچسب استفاده می‌شود</div>
+            </div>
+            
+            <div class="mb-3">
+              <label for="label" class="form-label">برچسب <span class="text-danger">*</span></label>
+              <input type="text" name="label" id="label" class="form-control" required placeholder="نام نمایشی">
+            </div>
+            
+            <div class="mb-3">
+              <label for="order" class="form-label">ترتیب</label>
+              <input type="number" name="order" id="order" class="form-control" value="0" min="0">
+            </div>
+            
+            <div class="d-flex justify-content-between">
+              <a href="{{ url_for('lookups') }}" class="btn btn-secondary">بازگشت</a>
+              <button type="submit" class="btn btn-primary">افزودن</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
