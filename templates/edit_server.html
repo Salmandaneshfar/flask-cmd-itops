@@ -94,10 +94,10 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/dynamic-fields.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dynamic-fields-v2.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  const dynamicFieldsManager = new DynamicFieldsManager('Server', 'dynamicFieldsContainer');
+  const dynamicFieldsManager = new DynamicFieldsManagerV2('Server', 'dynamicFieldsContainer');
   dynamicFieldsManager.setCurrentRecordId({{ server.id }});
   // بارگذاری مقادیر موجود بعد از ایجاد فیلدها
   setTimeout(() => {

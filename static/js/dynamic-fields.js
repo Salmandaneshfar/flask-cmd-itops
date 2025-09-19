@@ -16,7 +16,7 @@ class DynamicFieldsManager {
 
     async loadFields() {
         try {
-            const response = await fetch(`/api/custom-fields/${this.modelName}`);
+            const response = await fetch(`/api/custom-fields/${this.modelName}?t=${Date.now()}`);
             this.fields = await response.json();
         } catch (error) {
             console.error('خطا در بارگذاری فیلدها:', error);
@@ -149,11 +149,16 @@ class DynamicFieldsManager {
         // ذخیره خودکار مقادیر فیلدها
         const container = document.getElementById(this.containerId);
         if (container) {
+            console.log('Setting up event listeners for dynamic fields');
             container.addEventListener('change', (e) => {
+                console.log('Field changed:', e.target.name, e.target.value);
                 if (e.target.name && e.target.name.startsWith('custom_field_')) {
+                    console.log('Saving field value...');
                     this.saveFieldValue(e.target);
                 }
             });
+        } else {
+            console.error('Dynamic fields container not found:', this.containerId);
         }
     }
 
@@ -162,13 +167,18 @@ class DynamicFieldsManager {
         const value = input.type === 'checkbox' ? (input.checked ? '1' : '0') : input.value;
         const recordId = this.getCurrentRecordId();
 
+        console.log('Saving field value:', { fieldId, value, recordId, modelName: this.modelName });
+
         // فقط اگر رکورد موجود است، ذخیره کن
         if (recordId > 0) {
             try {
-                await fetch('/api/custom-field-value', {
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+                const response = await fetch('/api/custom-field-value', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
                     },
                     body: JSON.stringify({
                         field_id: fieldId,
@@ -177,9 +187,18 @@ class DynamicFieldsManager {
                         value: value
                     })
                 });
+                
+                const result = await response.json();
+                console.log('Save response:', result);
+                
+                if (!result.success) {
+                    console.error('Failed to save field value:', result.error);
+                }
             } catch (error) {
                 console.error('خطا در ذخیره فیلد:', error);
             }
+        } else {
+            console.warn('Record ID is 0, not saving field value');
         }
     }
 

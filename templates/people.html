@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">مدیریت یوزرهای سامانه</h5>
+    <a href="{{ url_for('add_person') }}" class="btn btn-primary btn-sm">افزودن کاربر سامانه</a>
+  </div>
+
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+      <a class="nav-link {% if category=='internal' %}active{% endif %}" href="{{ url_for('people', category='internal') }}">داخلی</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if category=='external' %}active{% endif %}" href="{{ url_for('people', category='external') }}">سایر ادارات</a>
+    </li>
+  </ul>
+
+  <form method="get" class="mb-3 d-flex" action="{{ url_for('people') }}">
+    <input type="hidden" name="category" value="{{ category }}">
+    <input name="q" class="form-control me-2" placeholder="جستجو (نام کاربری/دانگل/تلفن/واحد)" value="{{ q or '' }}">
+    <button class="btn btn-outline-secondary" type="submit">جستجو</button>
+  </form>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-striped align-middle mb-0">
+        <thead>
+          <tr>
+            <th>نام کاربری</th>
+            <th>دسته‌بندی</th>
+            <th>نام دانگل</th>
+            <th>شماره تماس</th>
+            <th>واحد/اداره</th>
+            <th>آخرین تغییر</th>
+            <th class="text-end">عملیات</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in people.items %}
+          <tr>
+            <td>{{ p.username }}</td>
+            <td>{{ 'داخلی' if p.category=='internal' else 'سایر ادارات' }}</td>
+            <td>{{ p.dongle_name or '-' }}</td>
+            <td>{{ p.phone or '-' }}</td>
+            <td>{{ p.department or '-' }}</td>
+            <td>{{ p.updated_at.strftime('%Y/%m/%d %H:%M') }}</td>
+            <td class="text-end">
+              <a href="{{ url_for('edit_person', id=p.id) }}" class="btn btn-sm btn-outline-secondary">ویرایش</a>
+              <button class="btn btn-sm btn-outline-danger" onclick="deletePerson({{ p.id }})">حذف</button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="text-center py-4 text-muted">موردی یافت نشد</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-body">
+      {% include 'partials/pagination.html' with context %}
+    </div>
+  </div>
+</div>
+
+<script>
+function deletePerson(id){
+  if(!confirm('آیا از حذف این مورد مطمئن هستید؟')) return;
+  fetch(`/people/delete/${id}`, {method:'POST', headers:{'X-CSRFToken': '{{ csrf_token() }}'}})
+    .then(r=>r.json()).then(d=>{ if(d.success) location.reload(); });
+}
+</script>
+{% endblock %}
+
+

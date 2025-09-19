@@ -1,0 +1,21 @@
+{% if (people and people.pages > 1) or (items and items.pages > 1) %}
+{% set pager = people or items %}
+<nav aria-label="صفحه‌بندی" class="d-flex justify-content-center">
+  <ul class="pagination mb-0">
+    <li class="page-item {% if not pager.has_prev %}disabled{% endif %}">
+      <a class="page-link" href="?page={{ pager.prev_num }}{% if request.args.get('category') %}&category={{ request.args.get('category') }}{% endif %}{% if request.args.get('q') %}&q={{ request.args.get('q') }}{% endif %}">قبلی</a>
+    </li>
+    {% for p in range(1, pager.pages + 1) %}
+    <li class="page-item {% if p == pager.page %}active{% endif %}">
+      <a class="page-link" href="?page={{ p }}{% if request.args.get('category') %}&category={{ request.args.get('category') }}{% endif %}{% if request.args.get('q') %}&q={{ request.args.get('q') }}{% endif %}">{{ p }}</a>
+    </li>
+    {% endfor %}
+    <li class="page-item {% if not pager.has_next %}disabled{% endif %}">
+      <a class="page-link" href="?page={{ pager.next_num }}{% if request.args.get('category') %}&category={{ request.args.get('category') }}{% endif %}{% if request.args.get('q') %}&q={{ request.args.get('q') }}{% endif %}">بعدی</a>
+    </li>
+  </ul>
+  <span class="ms-3 align-self-center text-muted" style="font-size: 0.9rem;">صفحه {{ pager.page }} از {{ pager.pages }}</span>
+  </nav>
+{% endif %}
+
+

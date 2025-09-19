@@ -16,14 +16,14 @@ services:
       - ./static/uploads:/app/static/uploads:Z
       - ./logs:/app/logs:Z
       - ./instance:/app/instance:Z
+      - ./backups:/app/backups:Z
     depends_on:
       - db
       - redis
     networks:
       - cms-network
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; from urllib.error import URLError; url='http://localhost:5000/health';
-try:\n    resp=urllib.request.urlopen(url, timeout=10); sys.exit(0 if resp.getcode()==200 else 1)\nexcept URLError:\n    sys.exit(1)"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys; from urllib.error import URLError; url='http://localhost:5000/health'; try: resp=urllib.request.urlopen(url, timeout=10); sys.exit(0 if resp.getcode()==200 else 1); except URLError: sys.exit(1)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -107,6 +107,42 @@ try:\n    resp=urllib.request.urlopen(url, timeout=10); sys.exit(0 if resp.getco
       - cms-network
     profiles:
       - tools
+
+  # سرویس بکاپ خودکار
+  backup:
+    image: postgres:15-alpine
+    container_name: flask-cms-backup
+    restart: unless-stopped
+    environment:
+      - PGPASSWORD=${DB_PASSWORD:-cms_password}
+    volumes:
+      - ./backups:/backups
+      - ./scripts:/scripts
+    depends_on:
+      - db
+    networks:
+      - cms-network
+    command: >
+      sh -c "
+        echo '🔄 شروع سرویس بکاپ خودکار...';
+        while true; do
+          BACKUP_FILE=backup_$$(date +%Y%m%d_%H%M%S);
+          echo '💾 ایجاد بکاپ در $$(date)';
+          if pg_dump -h db -U cms_user -d cms_db > /backups/$${BACKUP_FILE}.sql; then
+            echo '🗜️ فشرده‌سازی بکاپ...';
+            gzip /backups/$${BACKUP_FILE}.sql;
+            echo '✅ بکاپ با موفقیت ایجاد شد: $${BACKUP_FILE}.sql.gz';
+            ls -lh /backups/$${BACKUP_FILE}.sql.gz;
+          else
+            echo '❌ خطا در ایجاد بکاپ';
+            rm -f /backups/$${BACKUP_FILE}.sql;
+          fi;
+          echo '🧹 حذف بکاپ‌های قدیمی (بیش از 7 روز)...';
+          find /backups -name 'backup_*.sql.gz' -mtime +7 -delete;
+          echo '⏰ انتظار 24 ساعت برای بکاپ بعدی...';
+          sleep 86400;
+        done
+      "
 
 volumes:
   postgres_data:

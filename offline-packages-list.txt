@@ -1,0 +1,95 @@
+# لیست پکیج‌های RPM مورد نیاز برای Red Hat 8.10
+# این فایل برای دانلود آفلاین پکیج‌ها استفاده می‌شود
+
+# Python و ابزارهای توسعه
+python3.11
+python3.11-pip
+python3.11-devel
+python3.11-setuptools
+python3.11-wheel
+python3.11-libs
+
+# ابزارهای build
+gcc
+gcc-c++
+make
+cmake
+pkg-config
+autoconf
+automake
+libtool
+
+# کتابخانه‌های سیستم
+openssl-devel
+libffi-devel
+zlib-devel
+bzip2-devel
+readline-devel
+sqlite-devel
+tk-devel
+gdbm-devel
+db4-devel
+libpcap-devel
+xz-devel
+expat-devel
+libuuid-devel
+libxml2-devel
+libxslt-devel
+ncurses-devel
+tcl-devel
+libyaml-devel
+
+# PostgreSQL
+postgresql15-server
+postgresql15-devel
+postgresql15-contrib
+postgresql15-libs
+
+# Redis
+redis6
+redis6-devel
+
+# Nginx
+nginx
+nginx-mod-http-image-filter
+nginx-mod-http-perl
+nginx-mod-http-xslt-filter
+nginx-mod-mail
+nginx-mod-stream
+
+# ابزارهای امنیت
+openssl
+certbot
+python3-certbot-nginx
+
+# ابزارهای شبکه
+curl
+wget
+net-tools
+
+# ابزارهای مدیریت سیستم
+htop
+iotop
+lsof
+strace
+tcpdump
+
+# ابزارهای بکاپ
+tar
+gzip
+rsync
+
+# ابزارهای مانیتورینگ
+sysstat
+dstat
+
+# ابزارهای امنیت اضافی
+fail2ban
+iptables-services
+
+# ابزارهای توسعه اضافی
+git
+vim
+nano
+tree
+

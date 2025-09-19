@@ -124,6 +124,9 @@
                     <a href="{{ url_for('edit_security_project', id=project.id) }}" class="btn btn-sm btn-outline-primary" title="ویرایش">
                       <i class="fas fa-edit"></i>
                     </a>
+                    <a href="{{ url_for('attachments', model_name='SecurityProject', record_id=project.id) }}" class="btn btn-sm btn-outline-info" title="پیوست‌ها">
+                      <i class="fas fa-paperclip"></i>
+                    </a>
                     <button class="btn btn-sm btn-outline-danger" onclick="deleteProject({{ project.id }})" title="حذف">
                       <i class="fas fa-trash"></i>
                     </button>
@@ -222,13 +225,20 @@ function filterTable() {
 
 // حذف پروژه
 function deleteProject(projectId) {
-  if (confirm('آیا مطمئن هستید که می‌خواهید این پروژه را حذف کنید؟')) {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = `/security-projects/delete/${projectId}`;
-    document.body.appendChild(form);
-    form.submit();
-  }
+  if (!confirm('آیا مطمئن هستید که می‌خواهید این پروژه را حذف کنید؟')) return;
+  const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  fetch(`/security-projects/delete/${projectId}`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': csrf
+    }
+  }).then(r => {
+    if (r.ok) {
+      location.reload();
+    } else {
+      alert('حذف با خطا مواجه شد');
+    }
+  }).catch(() => alert('خطا در ارتباط با سرور'));
 }
 
 // انیمیشن ورود ردیف‌ها

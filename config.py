@@ -50,14 +50,13 @@ class Config:
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
     LOG_FILE = os.environ.get('LOG_FILE', 'logs/app.log')
     
-    # تنظیمات Caching
-    CACHE_TYPE = 'redis'
-    CACHE_REDIS_URL = REDIS_URL
-    CACHE_DEFAULT_TIMEOUT = 300
+    # تنظیمات Caching (در حالت توسعه به صورت پیشفرض حافظه‌ای)
+    CACHE_TYPE = os.environ.get('CACHE_TYPE', 'simple')  # 'simple' برای dev، 'redis' برای prod
+    CACHE_REDIS_URL = os.environ.get('CACHE_REDIS_URL', REDIS_URL)
+    CACHE_DEFAULT_TIMEOUT = int(os.environ.get('CACHE_DEFAULT_TIMEOUT', 300))
 
-    # تنظیمات Rate Limiter
-    # امکان override با متغیر محیطی برای اجرای محلی بدون Redis
-    RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI') or REDIS_URL
+    # تنظیمات Rate Limiter: در dev حافظه‌ای، در prod قابل override با REDIS
+    RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'memory://')
 
 class DevelopmentConfig(Config):
     DEBUG = True

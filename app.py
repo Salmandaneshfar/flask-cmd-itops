@@ -5,18 +5,20 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import sqlite3
 import redis
 
 from config import config
 from sqlalchemy import or_, text
-from models import db, User, Server, Task, Content, Backup, CustomField, CustomFieldValue, SecurityProject, Notification, Credential, Bookmark
+from models import db, User, Server, Task, Content, Backup, CustomField, CustomFieldValue, SecurityProject, Notification, Credential, Bookmark, Attachment, ActivityLog, Person, LookupItem
+from app_custom_fields import custom_fields_bp
 from forms import (LoginForm, UserForm, EditUserForm, ChangePasswordForm, 
-                  ServerForm, TaskForm, ContentForm, BackupForm, SearchForm,
+                  ServerForm, TaskForm, ContentForm, BackupForm,
                   CustomFieldForm, CustomFieldEditForm, SecurityProjectForm, SecurityProjectEditForm,
-                  CredentialForm, CredentialEditForm, CredentialSearchForm, BookmarkForm, BookmarkEditForm)
+                  CredentialForm, CredentialEditForm, CredentialSearchForm, BookmarkForm, BookmarkEditForm,
+                  PersonForm, PersonEditForm)
 from logging_config import setup_logging, security_logger
 
 def create_app(config_name='default'):
@@ -47,12 +49,128 @@ def create_app(config_name='default'):
     login_manager.login_message = 'لطفاً ابتدا وارد شوید.'
     login_manager.login_message_category = 'info'
     
+    # Ensure database tables exist (simple bootstrap; replace with migrations in production)
+    try:
+        with app.app_context():
+            db.create_all()
+    except Exception:
+        pass
+
     # Setup logging
     setup_logging(app)
+    
+    # Register custom fields blueprint
+    app.register_blueprint(custom_fields_bp)
+    
+    # Test route for debugging dropdowns
+    @app.route('/test-dropdown')
+    def test_dropdown():
+        return render_template('test_dropdown.html')
+    
+    # Comprehensive test route for all fields
+    @app.route('/test-all-fields')
+    def test_all_fields():
+        return render_template('test_all_fields.html')
+
+    # Ensure ActivityLog table has required columns (handles existing DBs without migrations)
+    try:
+        with app.app_context():
+            engine = db.get_engine()
+            conn = engine.connect()
+            try:
+                # Detect existing columns (SQLite and Postgres compatible)
+                inspector = db.inspect(engine)
+                columns = {col['name'] for col in inspector.get_columns('activity_log')}
+                # Columns we expect to exist
+                required_columns = {
+                    'id','user_id','username','action','model_name','record_id',
+                    'method','path','status_code','ip_address','user_agent','details','created_at'
+                }
+                missing = required_columns - columns
+                # Add missing columns where possible (SQLite supports simple ADD COLUMN)
+                for col in missing:
+                    if col == 'username':
+                        conn.execute(text("ALTER TABLE activity_log ADD COLUMN username VARCHAR(80)"))
+                    elif col == 'method':
+                        conn.execute(text("ALTER TABLE activity_log ADD COLUMN method VARCHAR(10)"))
+                    elif col == 'path':
+                        conn.execute(text("ALTER TABLE activity_log ADD COLUMN path VARCHAR(255)"))
+                    elif col == 'status_code':
+                        conn.execute(text("ALTER TABLE activity_log ADD COLUMN status_code INTEGER"))
+                    elif col == 'ip_address':
+                        conn.execute(text("ALTER TABLE activity_log ADD COLUMN ip_address VARCHAR(100)"))
+                    elif col == 'user_agent':
+                        conn.execute(text("ALTER TABLE activity_log ADD COLUMN user_agent VARCHAR(255)"))
+                    elif col == 'details':
+                        conn.execute(text("ALTER TABLE activity_log ADD COLUMN details TEXT"))
+                    elif col == 'model_name':
+                        conn.execute(text("ALTER TABLE activity_log ADD COLUMN model_name VARCHAR(50)"))
+                    elif col == 'record_id':
+                        conn.execute(text("ALTER TABLE activity_log ADD COLUMN record_id INTEGER"))
+                    elif col == 'created_at':
+                        conn.execute(text("ALTER TABLE activity_log ADD COLUMN created_at DATETIME"))
+                    elif col == 'user_id':
+                        conn.execute(text("ALTER TABLE activity_log ADD COLUMN user_id INTEGER"))
+                    elif col == 'action':
+                        conn.execute(text("ALTER TABLE activity_log ADD COLUMN action VARCHAR(100)"))
+                    elif col == 'id':
+                        # Primary key missing implies table doesn't exist as expected; skip here
+                        pass
+            finally:
+                conn.close()
+    except Exception:
+        # Silent: do not block app startup if ALTER not supported
+        pass
+    
+    # Activity logging helper
+    def log_activity(action, model_name=None, record_id=None, status_code=None, details=None):
+        try:
+            log_entry = ActivityLog(
+                user_id=current_user.id if current_user.is_authenticated else None,
+                username=current_user.username if current_user.is_authenticated else 'Anonymous',
+                action=action,
+                model_name=model_name,
+                record_id=record_id,
+                method=request.method,
+                path=request.path,
+                status_code=status_code,
+                details=details,
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent')
+            )
+            db.session.add(log_entry)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            # Don't fail the main request if logging fails
+            pass
+    
+    # Make log_activity available globally
+    app.log_activity = log_activity
     
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
+    
+    # Global activity logger for all write requests (fallback)
+    @app.after_request
+    def log_write_requests(response):
+        try:
+            # Skip static and health endpoints
+            if request.endpoint in ['static', 'health_check']:
+                return response
+            # Log only state-changing methods; GETs are noisy
+            if request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+                app.log_activity(
+                    action=f"{request.method.lower()}",
+                    model_name=request.endpoint,
+                    record_id=None,
+                    status_code=response.status_code,
+                    details=None
+                )
+        except Exception:
+            pass
+        return response
     
     # Ensure required directories exist
     os.makedirs('instance', exist_ok=True)
@@ -105,6 +223,7 @@ def create_app(config_name='default'):
                     ip=request.remote_addr,
                     success=True
                 )
+                app.log_activity('login', 'user', user.id, 200, f'Successful login for {form.username.data}')
                 
                 next_page = request.args.get('next')
                 return redirect(next_page) if next_page else redirect(url_for('dashboard'))
@@ -122,7 +241,10 @@ def create_app(config_name='default'):
     @app.route('/logout')
     @login_required
     def logout():
+        user_id = current_user.id
+        username = current_user.username
         logout_user()
+        app.log_activity('logout', 'user', user_id, 200, f'User {username} logged out')
         return redirect(url_for('login'))
     
     # Main routes
@@ -217,6 +339,7 @@ def create_app(config_name='default'):
                         continue
             
             db.session.commit()
+            app.log_activity('create', 'user', user.id, 200, f'Created user: {user.username}')
             flash('کاربر با موفقیت اضافه شد.', 'success')
             return redirect(url_for('users'))
         
@@ -806,188 +929,43 @@ def create_app(config_name='default'):
         
         return render_template('search.html', form=form, results=results)
     
-    # Custom Fields Management
+    # Custom Fields Management - Redirect to new system
     @app.route('/custom-fields')
     @login_required
     def custom_fields():
-        if current_user.role != 'admin':
-            flash('شما دسترسی لازم را ندارید.', 'error')
-            return redirect(url_for('dashboard'))
-        
-        page = request.args.get('page', 1, type=int)
-        fields = CustomField.query.order_by(CustomField.model_name, CustomField.order).paginate(
-            page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
-        return render_template('custom_fields.html', fields=fields)
+        return redirect(url_for('custom_fields.list_fields'))
     
     @app.route('/custom-fields/add', methods=['GET', 'POST'])
     @login_required
     def add_custom_field():
-        if current_user.role != 'admin':
-            flash('شما دسترسی لازم را ندارید.', 'error')
-            return redirect(url_for('custom_fields'))
-        
-        form = CustomFieldForm()
-        if form.validate_on_submit():
-            # بررسی تکراری نبودن نام فیلد
-            existing_field = CustomField.query.filter_by(
-                name=form.name.data, 
-                model_name=form.model_name.data
-            ).first()
-            
-            if existing_field:
-                flash('فیلد با این نام قبلاً برای این مدل تعریف شده است.', 'error')
-                return render_template('add_custom_field.html', form=form)
-            
-            field = CustomField(
-                name=form.name.data,
-                label=form.label.data,
-                field_type=form.field_type.data,
-                model_name=form.model_name.data,
-                is_required=form.is_required.data,
-                is_active=form.is_active.data,
-                placeholder=form.placeholder.data,
-                help_text=form.help_text.data,
-                order=int(form.order.data) if form.order.data else 0
-            )
-            
-            # پردازش گزینه‌های انتخابی
-            if form.options.data and form.field_type.data == 'select':
-                options_list = [opt.strip() for opt in form.options.data.split('\n') if opt.strip()]
-                field.set_options(options_list)
-            
-            db.session.add(field)
-            db.session.commit()
-            flash('فیلد سفارشی با موفقیت اضافه شد.', 'success')
-            return redirect(url_for('custom_fields'))
-        
-        return render_template('add_custom_field.html', form=form)
+        return redirect(url_for('custom_fields.add_field'))
     
     @app.route('/custom-fields/edit/<int:id>', methods=['GET', 'POST'])
     @login_required
     def edit_custom_field(id):
-        if current_user.role != 'admin':
-            flash('شما دسترسی لازم را ندارید.', 'error')
-            return redirect(url_for('custom_fields'))
-        
-        field = CustomField.query.get_or_404(id)
-        form = CustomFieldEditForm(obj=field)
-        
-        # نمایش گزینه‌های موجود
-        if field.field_type == 'select' and field.options:
-            form.options.data = '\n'.join(field.get_options())
-        
-        if form.validate_on_submit():
-            field.label = form.label.data
-            field.field_type = form.field_type.data
-            field.is_required = form.is_required.data
-            field.is_active = form.is_active.data
-            field.placeholder = form.placeholder.data
-            field.help_text = form.help_text.data
-            field.order = int(form.order.data) if form.order.data else 0
-            
-            # پردازش گزینه‌های انتخابی
-            if form.options.data and form.field_type.data == 'select':
-                options_list = [opt.strip() for opt in form.options.data.split('\n') if opt.strip()]
-                field.set_options(options_list)
-            else:
-                field.options = None
-            
-            db.session.commit()
-            flash('فیلد سفارشی با موفقیت ویرایش شد.', 'success')
-            return redirect(url_for('custom_fields'))
-        
-        return render_template('edit_custom_field.html', form=form, field=field)
+        return redirect(url_for('custom_fields.edit_field', id=id))
     
     @app.route('/custom-fields/delete/<int:id>', methods=['POST'])
     @login_required
     def delete_custom_field(id):
-        if current_user.role != 'admin':
-            flash('شما دسترسی لازم را ندارید.', 'error')
-            return redirect(url_for('custom_fields'))
-        
-        field = CustomField.query.get_or_404(id)
-        
-        # حذف مقادیر مربوطه
-        CustomFieldValue.query.filter_by(field_id=id).delete()
-        
-        db.session.delete(field)
-        db.session.commit()
-        flash('فیلد سفارشی با موفقیت حذف شد.', 'success')
-        return redirect(url_for('custom_fields'))
+        return redirect(url_for('custom_fields.delete_field', id=id))
     
-    # API for dynamic field values
+    # API for dynamic field values - Redirect to new system
     @app.route('/api/custom-field-value', methods=['POST'])
     @login_required
     def save_custom_field_value():
-        data = request.get_json()
-        field_id = data.get('field_id')
-        model_name = data.get('model_name')
-        record_id = data.get('record_id')
-        value = data.get('value')
-        
-        # پیدا کردن یا ایجاد مقدار فیلد
-        field_value = CustomFieldValue.query.filter_by(
-            field_id=field_id,
-            model_name=model_name,
-            record_id=record_id
-        ).first()
-        
-        if field_value:
-            field_value.value = value
-        else:
-            field_value = CustomFieldValue(
-                field_id=field_id,
-                model_name=model_name,
-                record_id=record_id,
-                value=value
-            )
-            db.session.add(field_value)
-        
-        db.session.commit()
-        return jsonify({'success': True})
+        return redirect(url_for('custom_fields.save_field_value'))
     
     @app.route('/api/custom-field-values/<model_name>/<int:record_id>')
     @login_required
     def get_custom_field_values(model_name, record_id):
-        values = CustomFieldValue.query.filter_by(
-            model_name=model_name,
-            record_id=record_id
-        ).all()
-        
-        result = {}
-        for value in values:
-            result[value.field.name] = {
-                'value': value.value,
-                'field_type': value.field.field_type,
-                'label': value.field.label,
-                'field_id': value.field_id
-            }
-        
-        return jsonify(result)
+        return redirect(url_for('custom_fields.get_field_values', model_name=model_name, record_id=record_id))
     
     # API برای دریافت فیلدهای داینامیک یک مدل
     @app.route('/api/custom-fields/<model_name>')
     @login_required
     def get_custom_fields_for_model(model_name):
-        fields = CustomField.query.filter_by(
-            model_name=model_name,
-            is_active=True
-        ).order_by(CustomField.order).all()
-        
-        result = []
-        for field in fields:
-            result.append({
-                'id': field.id,
-                'name': field.name,
-                'label': field.label,
-                'field_type': field.field_type,
-                'is_required': field.is_required,
-                'placeholder': field.placeholder,
-                'help_text': field.help_text,
-                'options': field.get_options() if field.field_type == 'select' else None
-            })
-        
-        return jsonify(result)
+        return redirect(url_for('custom_fields.get_fields_for_model', model_name=model_name))
     
     # API برای حذف فیلد سفارشی
     @app.route('/api/custom-fields/<int:field_id>/delete', methods=['POST'])
@@ -1064,6 +1042,71 @@ def create_app(config_name='default'):
         db.session.commit()
         return jsonify({'success': True})
 
+    # Admin: Activity Logs page
+    @app.route('/admin/activity-logs')
+    @login_required
+    def activity_logs():
+        if current_user.role != 'admin':
+            flash('دسترسی غیرمجاز.', 'error')
+            return redirect(url_for('dashboard'))
+
+        page = request.args.get('page', 1, type=int)
+        query = request.args.get('query', '')
+        action = request.args.get('action', '')
+        username = request.args.get('username', '')
+        model_name = request.args.get('model_name', '')
+
+        logs_q = ActivityLog.query.order_by(ActivityLog.created_at.desc())
+        if query:
+            like = f"%{query}%"
+            logs_q = logs_q.filter(or_(ActivityLog.details.ilike(like), ActivityLog.path.ilike(like)))
+        if action:
+            logs_q = logs_q.filter_by(action=action)
+        if username:
+            logs_q = logs_q.filter(ActivityLog.username.ilike(f"%{username}%"))
+        if model_name:
+            logs_q = logs_q.filter_by(model_name=model_name)
+
+        logs = logs_q.paginate(page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
+        return render_template('activity_logs.html', logs=logs)
+
+    # API: recent activity logs for dashboard live refresh
+    @app.route('/api/activity-logs/recent')
+    @login_required
+    def api_activity_logs_recent():
+        limit = request.args.get('limit', 5, type=int)
+        # Dashboard widget is admin-only; return global recent logs
+        items = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(limit).all()
+        def to_iso_z(dt):
+            try:
+                # Always mark as UTC (server stores naive UTC)
+                return (dt.isoformat() + ('Z' if dt.tzinfo is None else ''))
+            except Exception:
+                return None
+        resp = jsonify({
+            'success': True,
+            'items': [
+                {
+                    'id': i.id,
+                    'username': i.username,
+                    'user_id': i.user_id,
+                    'action': i.action,
+                    'model_name': i.model_name,
+                    'record_id': i.record_id,
+                    'method': i.method,
+                    'path': i.path,
+                    'status_code': i.status_code,
+                    'created_at': to_iso_z(i.created_at),
+                    'created_at_ts': int(i.created_at.timestamp() * 1000) if i.created_at else None
+                }
+                for i in items
+            ]
+        })
+        # Prevent any intermediary/browser caching
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        return resp
+
     # Bookmarks
     @app.route('/bookmarks')
     @login_required
@@ -1082,6 +1125,141 @@ def create_app(config_name='default'):
 
         bookmarks_page = bookmarks_query.order_by(Bookmark.is_favorite.desc(), Bookmark.updated_at.desc()).paginate(page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
         return render_template('bookmarks.html', bookmarks=bookmarks_page, query=query, only_fav=only_fav)
+
+    # People (internal/external users of systems)
+    @app.route('/lookups')
+    @login_required
+    def lookups():
+        if current_user.role != 'admin':
+            flash('دسترسی غیرمجاز.', 'error')
+            return redirect(url_for('dashboard'))
+        group = request.args.get('group', 'department')
+        items = LookupItem.query.filter_by(group=group).order_by(LookupItem.order.asc(), LookupItem.label.asc()).all()
+        return render_template('lookups.html', group=group, items=items)
+
+    @app.route('/lookups/add', methods=['GET', 'POST'])
+    @login_required
+    def add_lookup():
+        if current_user.role != 'admin':
+            flash('دسترسی غیرمجاز.', 'error')
+            return redirect(url_for('dashboard'))
+        if request.method == 'POST':
+            group = request.form.get('group') or 'department'
+            key = request.form.get('key') or request.form.get('label')
+            label = request.form.get('label')
+            order = int(request.form.get('order') or 0)
+            if not label:
+                flash('برچسب الزامی است', 'error')
+                return redirect(url_for('lookups', group=group))
+            item = LookupItem(group=group, key=key, label=label, order=order, is_active=True)
+            db.session.add(item)
+            db.session.commit()
+            app.log_activity('create', 'LookupItem', item.id, 200, f'Add {group}:{label}')
+            return redirect(url_for('lookups', group=group))
+        return render_template('add_lookup.html')
+
+    @app.route('/lookups/<int:id>/toggle', methods=['POST'])
+    @login_required
+    def toggle_lookup(id):
+        if current_user.role != 'admin':
+            return jsonify({'success': False})
+        item = LookupItem.query.get_or_404(id)
+        item.is_active = not item.is_active
+        db.session.commit()
+        app.log_activity('update', 'LookupItem', item.id, 200, f'Toggle {item.group}:{item.label} -> {item.is_active}')
+        return jsonify({'success': True, 'is_active': item.is_active})
+
+    @app.route('/lookups/<int:id>/delete', methods=['POST'])
+    @login_required
+    def delete_lookup(id):
+        if current_user.role != 'admin':
+            return jsonify({'success': False})
+        item = LookupItem.query.get_or_404(id)
+        group = item.group
+        db.session.delete(item)
+        db.session.commit()
+        app.log_activity('delete', 'LookupItem', id, 200, f'Delete {group}:{item.label}')
+        return jsonify({'success': True})
+
+    @app.route('/people')
+    @login_required
+    def people():
+        if current_user.role != 'admin':
+            flash('دسترسی غیرمجاز.', 'error')
+            return redirect(url_for('dashboard'))
+        page = request.args.get('page', 1, type=int)
+        category = request.args.get('category', 'internal')
+        q = request.args.get('q', '')
+        query = Person.query
+        if category in ('internal', 'external'):
+            query = query.filter_by(category=category)
+        if q:
+            like = f"%{q}%"
+            query = query.filter(or_(Person.username.ilike(like), Person.dongle_name.ilike(like), Person.phone.ilike(like), Person.department.ilike(like)))
+        people_page = query.order_by(Person.updated_at.desc(), Person.created_at.desc()).paginate(page=page, per_page=app.config['ITEMS_PER_PAGE'], error_out=False)
+        return render_template('people.html', people=people_page, category=category, q=q)
+
+    @app.route('/people/add', methods=['GET', 'POST'])
+    @login_required
+    def add_person():
+        if current_user.role != 'admin':
+            flash('دسترسی غیرمجاز.', 'error')
+            return redirect(url_for('people'))
+        form = PersonForm()
+        # fill department choices from lookups
+        departments = LookupItem.query.filter_by(group='department', is_active=True).order_by(LookupItem.order.asc(), LookupItem.label.asc()).all()
+        form.department.choices = [('', 'انتخاب واحد/اداره')] + [(d.key, d.label) for d in departments]
+        if form.validate_on_submit():
+            person = Person(
+                category=form.category.data,
+                username=form.username.data,
+                dongle_name=form.dongle_name.data or None,
+                phone=form.phone.data or None,
+                department=form.department.data or None,
+                description=form.description.data or None,
+                created_by=current_user.id
+            )
+            db.session.add(person)
+            db.session.commit()
+            app.log_activity('create', 'Person', person.id, 200, f'Add person {person.username}')
+            flash('کاربر سامانه با موفقیت افزوده شد.', 'success')
+            return redirect(url_for('people', category=person.category))
+        return render_template('add_person.html', form=form)
+
+    @app.route('/people/edit/<int:id>', methods=['GET', 'POST'])
+    @login_required
+    def edit_person(id):
+        if current_user.role != 'admin':
+            flash('دسترسی غیرمجاز.', 'error')
+            return redirect(url_for('people'))
+        person = Person.query.get_or_404(id)
+        form = PersonEditForm(obj=person)
+        departments = LookupItem.query.filter_by(group='department', is_active=True).order_by(LookupItem.order.asc(), LookupItem.label.asc()).all()
+        form.department.choices = [('', 'انتخاب واحد/اداره')] + [(d.key, d.label) for d in departments]
+        if form.validate_on_submit():
+            person.category = form.category.data
+            person.username = form.username.data
+            person.dongle_name = form.dongle_name.data or None
+            person.phone = form.phone.data or None
+            person.department = form.department.data or None
+            person.description = form.description.data or None
+            db.session.commit()
+            app.log_activity('update', 'Person', person.id, 200, f'Edit person {person.username}')
+            flash('به‌روزرسانی با موفقیت انجام شد.', 'success')
+            return redirect(url_for('people', category=person.category))
+        return render_template('edit_person.html', form=form, person=person)
+
+    @app.route('/people/delete/<int:id>', methods=['POST'])
+    @login_required
+    @csrf.exempt
+    def delete_person(id):
+        if current_user.role != 'admin':
+            return jsonify({'success': False, 'error': 'دسترسی غیرمجاز'})
+        person = Person.query.get_or_404(id)
+        db.session.delete(person)
+        db.session.commit()
+        app.log_activity('delete', 'Person', id, 200, f'Delete person {person.username}')
+        return jsonify({'success': True})
 
     @app.route('/bookmarks/add', methods=['GET', 'POST'])
     @login_required
@@ -1458,4 +1636,4 @@ app = create_app()
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)

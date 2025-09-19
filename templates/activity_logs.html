@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% block page_title %}لاگ فعالیت‌ها{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5><i class="fas fa-clipboard-list"></i> لاگ فعالیت‌ها</h5>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="GET" class="row g-3">
+      <div class="col-md-3">
+        <input type="text" name="query" class="form-control" placeholder="جستجو در مسیر/جزئیات" value="{{ request.args.get('query','') }}">
+      </div>
+      <div class="col-md-2">
+        <input type="text" name="username" class="form-control" placeholder="نام کاربری" value="{{ request.args.get('username','') }}">
+      </div>
+      <div class="col-md-2">
+        <input type="text" name="action" class="form-control" placeholder="اکشن" value="{{ request.args.get('action','') }}">
+      </div>
+      <div class="col-md-2">
+        <input type="text" name="model_name" class="form-control" placeholder="مدل" value="{{ request.args.get('model_name','') }}">
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-outline-primary w-100"><i class="fas fa-search"></i> فیلتر</button>
+      </div>
+    </form>
+  </div>
+  </div>
+
+<div class="card">
+  <div class="card-body">
+    {% if logs.items %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>زمان</th>
+              <th>کاربر</th>
+              <th>اکشن</th>
+              <th>مدل</th>
+              <th>شناسه رکورد</th>
+              <th>مسیر</th>
+              <th>IP</th>
+              <th>جزئیات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in logs.items %}
+            <tr>
+              <td><small class="text-muted">{{ log.created_at.strftime('%Y/%m/%d %H:%M') }}</small></td>
+              <td>{{ log.username or log.user_id or '-' }}</td>
+              <td><span class="badge bg-secondary">{{ log.action }}</span></td>
+              <td>{{ log.model_name or '-' }}</td>
+              <td>{{ log.record_id or '-' }}</td>
+              <td><small class="text-muted">{{ log.method }} {{ log.path }}</small></td>
+              <td><small class="text-muted">{{ log.ip_address }}</small></td>
+              <td><small class="text-break">{{ log.details or '-' }}</small></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if logs.pages > 1 %}
+      <nav aria-label="صفحه‌بندی">
+        <ul class="pagination justify-content-center">
+          {% if logs.has_prev %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('activity_logs', page=logs.prev_num) }}">قبلی</a></li>
+          {% endif %}
+          {% for page_num in logs.iter_pages() %}
+          {% if page_num %}
+          {% if page_num != logs.page %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('activity_logs', page=page_num) }}">{{ page_num }}</a></li>
+          {% else %}
+          <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+          {% endif %}
+          {% else %}
+          <li class="page-item disabled"><span class="page-link">...</span></li>
+          {% endif %}
+          {% endfor %}
+          {% if logs.has_next %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('activity_logs', page=logs.next_num) }}">بعدی</a></li>
+          {% endif %}
+        </ul>
+      </nav>
+      {% endif %}
+    {% else %}
+      <div class="text-center py-5">
+        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">لاگی موجود نیست</h5>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+

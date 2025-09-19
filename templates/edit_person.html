@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+  <h5 class="mb-3">ویرایش کاربر سامانه</h5>
+  <form method="post">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">{{ form.category.label }} {{ form.category(class='form-select') }}</div>
+    <div class="mb-3">{{ form.username.label }} {{ form.username(class='form-control') }}</div>
+    <div class="mb-3">{{ form.dongle_name.label }} {{ form.dongle_name(class='form-control') }}</div>
+    <div class="mb-3">{{ form.phone.label }} {{ form.phone(class='form-control') }}</div>
+    <div class="mb-3">{{ form.department.label }} {{ form.department(class='form-control') }}</div>
+    <div class="mb-3">{{ form.description.label }} {{ form.description(class='form-control') }}</div>
+    <button class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a href="{{ url_for('people') }}" class="btn btn-link">بازگشت</a>
+  </form>
+</div>
+{% endblock %}
+
+

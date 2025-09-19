@@ -177,13 +177,18 @@
 {% block scripts %}
 <script>
 function deleteServer(serverId) {
-  if (confirm('آیا مطمئن هستید که می‌خواهید این سرور را حذف کنید؟')) {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = `/servers/delete/${serverId}`;
-    document.body.appendChild(form);
-    form.submit();
-  }
+  if (!confirm('آیا مطمئن هستید که می‌خواهید این سرور را حذف کنید؟')) return;
+  const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  fetch(`/servers/delete/${serverId}`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': csrf }
+  }).then(r => {
+    if (r.ok) {
+      location.reload();
+    } else {
+      alert('حذف با خطا مواجه شد');
+    }
+  }).catch(() => alert('خطا در ارتباط با سرور'));
 }
 </script>
 {% endblock %}

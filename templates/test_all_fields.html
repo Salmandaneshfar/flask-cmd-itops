@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+{% block page_title %}تست کامل فیلدهای داینامیک{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-flask"></i> تست کامل فیلدهای داینامیک
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Test Controls -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-primary" onclick="testAPI()">
+                                    <i class="fas fa-download"></i> تست API
+                                </button>
+                                <button type="button" class="btn btn-success" onclick="testValidation()">
+                                    <i class="fas fa-check-circle"></i> تست اعتبارسنجی
+                                </button>
+                                <button type="button" class="btn btn-info" onclick="testSave()">
+                                    <i class="fas fa-save"></i> تست ذخیره
+                                </button>
+                                <button type="button" class="btn btn-warning" onclick="refreshFields()">
+                                    <i class="fas fa-sync"></i> بازخوانی
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <select class="form-select" id="modelSelect">
+                                    <option value="User">کاربران</option>
+                                    <option value="Server">سرورها</option>
+                                    <option value="Task">تسک‌ها</option>
+                                    <option value="Content">محتوا</option>
+                                    <option value="Backup">بکاپ‌ها</option>
+                                    <option value="SecurityProject">پروژه‌های امنیتی</option>
+                                    <option value="Credential">اعتبارنامه‌ها</option>
+                                    <option value="Bookmark">نشانک‌ها</option>
+                                    <option value="Person">اشخاص</option>
+                                </select>
+                                <button class="btn btn-outline-secondary" onclick="changeModel()">
+                                    <i class="fas fa-exchange-alt"></i> تغییر مدل
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- API Test Results -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">نتایج تست API</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="apiResults" class="bg-light p-3 rounded">
+                                        <em>برای شروع، دکمه "تست API" را بزنید</em>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Fields Container -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">فیلدهای داینامیک - مدل: <span id="currentModel">User</span></h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="dynamicFieldsContainer" data-dynamic-fields data-model="User">
+                                        <div class="text-center">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">در حال بارگذاری...</span>
+                                            </div>
+                                            <p class="mt-2">در حال بارگذاری فیلدها...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Field Values Display -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">مقادیر فیلدها</h6>
+                                </div>
+                                <div class="card-body">
+                                    <pre id="fieldValues" class="bg-light p-3 rounded">مقادیر فیلدها اینجا نمایش داده می‌شود</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dynamic-fields-v2.js') }}"></script>
+<script>
+let currentManager = null;
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Test page loaded');
+    initializeFields();
+});
+
+function initializeFields() {
+    const modelName = document.getElementById('modelSelect').value;
+    const container = document.getElementById('dynamicFieldsContainer');
+    
+    // Clear container
+    container.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">در حال بارگذاری فیلدها...</p></div>';
+    
+    // Initialize manager
+    currentManager = new DynamicFieldsManagerV2(modelName, 'dynamicFieldsContainer');
+    currentManager.setCurrentRecordId(1); // Test with record ID 1
+    
+    // Update UI
+    document.getElementById('currentModel').textContent = modelName;
+    
+    console.log(`✅ Initialized fields for model: ${modelName}`);
+}
+
+function changeModel() {
+    const newModel = document.getElementById('modelSelect').value;
+    console.log(`🔄 Changing model to: ${newModel}`);
+    initializeFields();
+}
+
+async function testAPI() {
+    const modelName = document.getElementById('modelSelect').value;
+    const resultsDiv = document.getElementById('apiResults');
+    
+    resultsDiv.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div> در حال تست API...</div>';
+    
+    try {
+        console.log(`🧪 Testing API for model: ${modelName}`);
+        
+        const response = await fetch(`/api/custom-fields/${modelName}?t=${Date.now()}`);
+        const data = await response.json();
+        
+        console.log('📊 API Response:', data);
+        
+        resultsDiv.innerHTML = `
+            <div class="alert alert-success">
+                <h6><i class="fas fa-check-circle"></i> API تست موفق</h6>
+                <p><strong>وضعیت:</strong> ${response.status} ${response.statusText}</p>
+                <p><strong>تعداد فیلدها:</strong> ${data.length}</p>
+                <details>
+                    <summary>جزئیات پاسخ</summary>
+                    <pre class="mt-2">${JSON.stringify(data, null, 2)}</pre>
+                </details>
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('❌ API Test failed:', error);
+        resultsDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <h6><i class="fas fa-exclamation-triangle"></i> خطا در تست API</h6>
+                <p><strong>خطا:</strong> ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function testValidation() {
+    if (!currentManager) {
+        alert('مدیر فیلدها هنوز آماده نیست');
+        return;
+    }
+    
+    console.log('🧪 Testing field validation...');
+    
+    const isValid = currentManager.validateAllFields();
+    const resultsDiv = document.getElementById('apiResults');
+    
+    if (isValid) {
+        resultsDiv.innerHTML = `
+            <div class="alert alert-success">
+                <h6><i class="fas fa-check-circle"></i> اعتبارسنجی موفق</h6>
+                <p>همه فیلدها معتبر هستند</p>
+            </div>
+        `;
+    } else {
+        resultsDiv.innerHTML = `
+            <div class="alert alert-warning">
+                <h6><i class="fas fa-exclamation-triangle"></i> خطا در اعتبارسنجی</h6>
+                <p>برخی فیلدها معتبر نیستند. لطفاً خطاها را بررسی کنید.</p>
+            </div>
+        `;
+    }
+}
+
+function testSave() {
+    if (!currentManager) {
+        alert('مدیر فیلدها هنوز آماده نیست');
+        return;
+    }
+    
+    console.log('🧪 Testing field save...');
+    
+    const values = currentManager.getAllFieldValues();
+    const resultsDiv = document.getElementById('apiResults');
+    
+    resultsDiv.innerHTML = `
+        <div class="alert alert-info">
+            <h6><i class="fas fa-info-circle"></i> تست ذخیره</h6>
+            <p>مقادیر فیلدها برای ذخیره آماده شده‌اند:</p>
+            <pre class="mt-2">${JSON.stringify(values, null, 2)}</pre>
+        </div>
+    `;
+    
+    // Update field values display
+    document.getElementById('fieldValues').textContent = JSON.stringify(values, null, 2);
+}
+
+function refreshFields() {
+    if (!currentManager) {
+        alert('مدیر فیلدها هنوز آماده نیست');
+        return;
+    }
+    
+    console.log('🔄 Refreshing fields...');
+    currentManager.refreshFields();
+    
+    const resultsDiv = document.getElementById('apiResults');
+    resultsDiv.innerHTML = `
+        <div class="alert alert-info">
+            <h6><i class="fas fa-sync"></i> بازخوانی فیلدها</h6>
+            <p>فیلدها با موفقیت بازخوانی شدند</p>
+        </div>
+    `;
+}
+
+// Update field values display periodically
+setInterval(() => {
+    if (currentManager) {
+        const values = currentManager.getAllFieldValues();
+        document.getElementById('fieldValues').textContent = JSON.stringify(values, null, 2);
+    }
+}, 2000);
+</script>
+{% endblock %}

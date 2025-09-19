@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}فایل‌های پیوست{% endblock %}
+{% block page_title %}فایل‌های پیوست برای {{ model_name }} #{{ record_id }}{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12 col-lg-8">
+    <div class="card mb-4">
+      <div class="card-header">فایل‌ها</div>
+      <div class="card-body">
+        {% if items %}
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>نام</th>
+                <th>حجم</th>
+                <th>تاریخ</th>
+                <th class="text-center">عملیات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in items %}
+              <tr>
+                <td>{{ a.file_name }}</td>
+                <td>{{ (a.file_size or 0) | int // 1024 }} KB</td>
+                <td>{{ a.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td class="text-center">
+                  <a class="btn btn-sm btn-primary" href="{{ url_for('attachment_download', attachment_id=a.id) }}">دانلود</a>
+                  <form action="{{ url_for('attachment_delete', attachment_id=a.id) }}" method="post" style="display:inline" onsubmit="return confirm('حذف فایل؟');">
+                    <button class="btn btn-sm btn-danger" type="submit">حذف</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-muted">فایلی موجود نیست.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-4">
+    <div class="card">
+      <div class="card-header">آپلود فایل جدید</div>
+      <div class="card-body">
+        <form action="{{ url_for('attachment_upload', model_name=model_name, record_id=record_id) }}" method="post" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <div class="mb-3">
+            <input type="file" class="form-control" name="file" required />
+          </div>
+          <button class="btn btn-success w-100" type="submit">آپلود</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+

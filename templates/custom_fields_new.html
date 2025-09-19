@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+{% block page_title %}مدیریت فیلدهای سفارشی{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5><i class="fas fa-cogs"></i> مدیریت فیلدهای سفارشی</h5>
+  <a href="{{ url_for('custom_fields.add_field') }}" class="btn btn-primary">
+    <i class="fas fa-plus"></i> فیلد جدید
+  </a>
+</div>
+
+<!-- فیلتر و جستجو -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="GET" class="row g-3">
+      <div class="col-md-3">
+        <select name="model" class="form-select">
+          <option value="">همه مدل‌ها</option>
+          <option value="User" {% if model_filter == 'User' %}selected{% endif %}>کاربران</option>
+          <option value="Server" {% if model_filter == 'Server' %}selected{% endif %}>سرورها</option>
+          <option value="Task" {% if model_filter == 'Task' %}selected{% endif %}>تسک‌ها</option>
+          <option value="Content" {% if model_filter == 'Content' %}selected{% endif %}>محتوا</option>
+          <option value="Backup" {% if model_filter == 'Backup' %}selected{% endif %}>بکاپ‌ها</option>
+          <option value="SecurityProject" {% if model_filter == 'SecurityProject' %}selected{% endif %}>پروژه‌های امنیتی</option>
+          <option value="Credential" {% if model_filter == 'Credential' %}selected{% endif %}>اعتبارنامه‌ها</option>
+          <option value="Bookmark" {% if model_filter == 'Bookmark' %}selected{% endif %}>نشانک‌ها</option>
+          <option value="Person" {% if model_filter == 'Person' %}selected{% endif %}>اشخاص</option>
+          <option value="Attachment" {% if model_filter == 'Attachment' %}selected{% endif %}>پیوست‌ها</option>
+          <option value="LookupItem" {% if model_filter == 'LookupItem' %}selected{% endif %}>آیتم‌های مرجع</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select name="type" class="form-select">
+          <option value="">همه انواع</option>
+          <option value="text" {% if type_filter == 'text' %}selected{% endif %}>متن</option>
+          <option value="number" {% if type_filter == 'number' %}selected{% endif %}>عدد</option>
+          <option value="email" {% if type_filter == 'email' %}selected{% endif %}>ایمیل</option>
+          <option value="date" {% if type_filter == 'date' %}selected{% endif %}>تاریخ</option>
+          <option value="select" {% if type_filter == 'select' %}selected{% endif %}>انتخاب از لیست</option>
+          <option value="textarea" {% if type_filter == 'textarea' %}selected{% endif %}>متن طولانی</option>
+          <option value="checkbox" {% if type_filter == 'checkbox' %}selected{% endif %}>چک باکس</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <input type="text" name="search" class="form-control" placeholder="جستجو در نام یا برچسب فیلد..." value="{{ search }}">
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-outline-primary w-100">
+          <i class="fas fa-search"></i> جستجو
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    {% if fields.items %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>نام فیلد</th>
+              <th>برچسب</th>
+              <th>نوع</th>
+              <th>مدل</th>
+              <th>وضعیت</th>
+              <th>ترتیب</th>
+              <th>عملیات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for field in fields.items %}
+              <tr>
+                <td>
+                  <code>{{ field.name }}</code>
+                </td>
+                <td>
+                  <strong>{{ field.label }}</strong>
+                  {% if field.help_text %}
+                    <br><small class="text-muted">{{ field.help_text }}</small>
+                  {% endif %}
+                </td>
+                <td>
+                  <span class="badge bg-{{ 'primary' if field.field_type == 'text' else 'success' if field.field_type == 'number' else 'info' if field.field_type == 'email' else 'warning' if field.field_type == 'date' else 'secondary' if field.field_type == 'select' else 'dark' }}">
+                    {{ field.field_type }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge bg-info">{{ field.model_name }}</span>
+                </td>
+                <td>
+                  <div class="d-flex align-items-center">
+                    <span class="badge bg-{{ 'success' if field.is_active else 'secondary' }} me-2">
+                      {{ 'فعال' if field.is_active else 'غیرفعال' }}
+                    </span>
+                    {% if field.is_required %}
+                      <span class="badge bg-danger">اجباری</span>
+                    {% endif %}
+                  </div>
+                </td>
+                <td>
+                  <span class="badge bg-light text-dark">{{ field.order }}</span>
+                </td>
+                <td>
+                  <div class="btn-group" role="group">
+                    <a href="{{ url_for('custom_fields.edit_field', id=field.id) }}" class="btn btn-sm btn-outline-primary" title="ویرایش">
+                      <i class="fas fa-edit"></i>
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteField({{ field.id }})" title="حذف">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- Pagination -->
+      {% if fields.pages > 1 %}
+        <nav aria-label="صفحه‌بندی">
+          <ul class="pagination justify-content-center">
+            {% if fields.has_prev %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('custom_fields.list_fields', page=fields.prev_num, model=model_filter, type=type_filter, search=search) }}">قبلی</a>
+              </li>
+            {% endif %}
+            
+            {% for page_num in fields.iter_pages() %}
+              {% if page_num %}
+                {% if page_num != fields.page %}
+                  <li class="page-item">
+                    <a class="page-link" href="{{ url_for('custom_fields.list_fields', page=page_num, model=model_filter, type=type_filter, search=search) }}">{{ page_num }}</a>
+                  </li>
+                {% else %}
+                  <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                  </li>
+                {% endif %}
+              {% else %}
+                <li class="page-item disabled">
+                  <span class="page-link">...</span>
+                </li>
+              {% endif %}
+            {% endfor %}
+            
+            {% if fields.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('custom_fields.list_fields', page=fields.next_num, model=model_filter, type=type_filter, search=search) }}">بعدی</a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      {% endif %}
+    {% else %}
+      <div class="text-center py-5">
+        <i class="fas fa-cogs fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">هیچ فیلد سفارشی یافت نشد</h5>
+        <p class="text-muted">برای شروع، اولین فیلد سفارشی را اضافه کنید</p>
+        <a href="{{ url_for('custom_fields.add_field') }}" class="btn btn-primary mt-3">
+          <i class="fas fa-plus"></i> فیلد جدید اضافه کنید
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deleteField(fieldId) {
+  if (confirm('آیا مطمئن هستید که می‌خواهید این فیلد را حذف کنید؟\nتمام مقادیر مربوط به این فیلد نیز حذف خواهد شد.')) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/custom-fields/delete/${fieldId}`;
+    
+    // اضافه کردن CSRF token
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrf_token';
+    csrfInput.value = '{{ csrf_token() }}';
+    form.appendChild(csrfInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+</script>
+{% endblock %}

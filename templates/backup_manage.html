@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% block title %}مدیریت بکاپ{% endblock %}
+{% block page_title %}مدیریت بکاپ{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12 col-lg-8">
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>فایل‌های بکاپ</span>
+        <a href="{{ url_for('backup_manage') }}" class="btn btn-outline-primary btn-sm">بارگذاری مجدد</a>
+      </div>
+      <div class="card-body">
+        {% if files %}
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead>
+              <tr>
+                <th>نام فایل</th>
+                <th>حجم</th>
+                <th>آخرین تغییر</th>
+                <th class="text-center">عملیات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for f in files %}
+              <tr>
+                <td><code>{{ f.name }}</code></td>
+                <td>{{ (f.size / 1024)|round(1) }} KB</td>
+                <td>{{ f.mtime.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td class="text-center">
+                  <a class="btn btn-sm btn-primary" href="{{ url_for('backup_download', filename=f.name) }}">دانلود</a>
+                  <form action="{{ url_for('backup_delete', filename=f.name) }}" method="post" style="display:inline" onsubmit="return confirm('حذف فایل بکاپ؟');">
+                    <button class="btn btn-sm btn-danger" type="submit">حذف</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+          <div class="text-muted">هیچ فایلی یافت نشد.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-4">
+    <div class="card mb-4">
+      <div class="card-header">آپلود فایل بکاپ</div>
+      <div class="card-body">
+        <form action="{{ url_for('backup_manage') }}" method="post" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <div class="mb-3">
+            <input class="form-control" type="file" name="backup_file" accept=".sql,.gz,.sql.gz" required />
+          </div>
+          <button class="btn btn-success w-100" type="submit">آپلود</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>ریستور و بکاپ (PostgreSQL)</span>
+        <form action="{{ url_for('backup_run') }}" method="post" class="m-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <button class="btn btn-sm btn-primary" type="submit">بکاپ الان</button>
+        </form>
+      </div>
+      <div class="card-body">
+        <p class="mb-2">پیش از ریستور از دیتابیس Snapshot بگیرید.</p>
+        <p class="mb-2">برای فایل‌های فشرده (.sql.gz):</p>
+        <pre class="bg-light p-2 rounded small">{{ restore_hint }}</pre>
+        <p class="mb-2">برای فایل‌های .sql:</p>
+        <pre class="bg-light p-2 rounded small">docker-compose exec -T db psql -U cms_user -d cms_db &lt; backups/FILE.sql</pre>
+        <hr />
+        <form action="{{ url_for('restore_run') }}" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <div class="mb-2">
+            <label class="form-label">انتخاب فایل برای ریستور</label>
+            <select name="restore_file" class="form-select" required>
+              <option value="" disabled selected>یک فایل را انتخاب کنید...</option>
+              {% for f in files %}
+                <option value="{{ f.name }}">{{ f.name }} ({{ (f.size/1024)|round(0) }} KB)</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button class="btn btn-danger w-100" type="submit" onclick="return confirm('آیا از ریستور دیتابیس مطمئن هستید؟ این عملیات غیرقابل بازگشت است.')">ریستور</button>
+        </form>
+        <p class="text-muted small">هنگام ریستور، سرویس را در حالت نگهداری قرار دهید.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+

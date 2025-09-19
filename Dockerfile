@@ -21,6 +21,7 @@ RUN set -eux; \
         apt-get install -y --no-install-recommends \
             build-essential \
             libpq-dev \
+            postgresql-client \
         && break || sleep 5; \
     done; \
     rm -rf /var/lib/apt/lists/*
@@ -51,12 +52,12 @@ EXPOSE 5000
 
 # Health check (use Python instead of curl)
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request,sys; \
-from urllib.error import URLError; \
-\
-url='http://localhost:5000/health'; \
-\
-try:\n    resp=urllib.request.urlopen(url, timeout=10)\n    ; sys.exit(0 if resp.getcode()==200 else 1)\nexcept URLError:\n    sys.exit(1)"
+    CMD python -c "import urllib.request,sys; from urllib.error import URLError; url='http://localhost:5000/health'; \
+try: \
+    resp=urllib.request.urlopen(url, timeout=10); \
+    sys.exit(0 if resp.getcode()==200 else 1) \
+except URLError: \
+    sys.exit(1)"
 
 # اجرای برنامه
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--timeout", "120", "app:app"]

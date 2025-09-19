@@ -16,7 +16,7 @@
         <input type="text" name="query" class="form-control" placeholder="جستجو در عنوان یا توضیحات تسک..." value="{{ request.args.get('query', '') }}">
       </div>
       <div class="col-md-2">
-        <select name="priority" class="form-select">
+        <select name="priority" class="form-select" title="انتخاب اولویت">
           <option value="">همه اولویت‌ها</option>
           <option value="urgent" {% if request.args.get('priority') == 'urgent' %}selected{% endif %}>فوری</option>
           <option value="high" {% if request.args.get('priority') == 'high' %}selected{% endif %}>زیاد</option>
@@ -25,7 +25,7 @@
         </select>
       </div>
       <div class="col-md-2">
-        <select name="status" class="form-select">
+        <select name="status" class="form-select" title="انتخاب وضعیت">
           <option value="">همه وضعیت‌ها</option>
           <option value="pending" {% if request.args.get('status') == 'pending' %}selected{% endif %}>در انتظار</option>
           <option value="in_progress" {% if request.args.get('status') == 'in_progress' %}selected{% endif %}>در حال انجام</option>
@@ -33,14 +33,16 @@
           <option value="cancelled" {% if request.args.get('status') == 'cancelled' %}selected{% endif %}>لغو شده</option>
         </select>
       </div>
+      {% if current_user.role in ['editor', 'admin'] %}
       <div class="col-md-2">
-        <select name="assigned_to" class="form-select">
+        <select name="assigned_to" class="form-select" title="انتخاب کاربر">
           <option value="">همه کاربران</option>
           {% for user in User.query.filter_by(is_active=True).all() %}
             <option value="{{ user.id }}" {% if request.args.get('assigned_to') == user.id|string %}selected{% endif %}>{{ user.username }}</option>
           {% endfor %}
         </select>
       </div>
+      {% endif %}
       <div class="col-md-2">
         <button type="submit" class="btn btn-outline-primary w-100">
           <i class="fas fa-search"></i> جستجو
@@ -123,6 +125,8 @@
                   {% endfor %}
                 {% endif %}
                 <td>
+                  {% set can_manage = (current_user.role in ['editor', 'admin']) or (task.assigned_to == current_user.id) or (task.created_by == current_user.id) %}
+                  {% if can_manage %}
                   <div class="btn-group" role="group">
                     <button class="btn btn-sm btn-outline-primary" onclick="updateTaskStatus({{ task.id }}, 'in_progress')" title="شروع">
                       <i class="fas fa-play"></i>
@@ -137,6 +141,9 @@
                       <i class="fas fa-trash"></i>
                     </button>
                   </div>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
                 </td>
               </tr>
             {% endfor %}

@@ -22,6 +22,8 @@ class EditUserForm(FlaskForm):
     email = StringField('ایمیل', validators=[DataRequired(), Email()])
     role = SelectField('نقش', choices=[('user', 'کاربر'), ('editor', 'ویرایشگر'), ('admin', 'مدیر')])
     is_active = BooleanField('فعال')
+    new_password = PasswordField('رمز عبور جدید (اختیاری)', validators=[Optional(), Length(min=6)])
+    confirm_new_password = PasswordField('تکرار رمز عبور جدید', validators=[Optional(), EqualTo('new_password', message='رمزهای عبور باید یکسان باشند')])
     submit = SubmitField('ذخیره')
 
 class ChangePasswordForm(FlaskForm):
@@ -175,16 +177,7 @@ class BackupForm(FlaskForm):
     ], validators=[DataRequired()])
     submit = SubmitField('ذخیره')
 
-class SearchForm(FlaskForm):
-    query = StringField('جستجو', validators=[DataRequired(), Length(min=1, max=100)])
-    search_type = SelectField('نوع جستجو', choices=[
-        ('all', 'همه'),
-        ('users', 'کاربران'),
-        ('servers', 'سرورها'),
-        ('tasks', 'تسک‌ها'),
-        ('content', 'محتوا')
-    ], default='all')
-    submit = SubmitField('جستجو')
+## SearchForm removed per product decision
 
 class CustomFieldForm(FlaskForm):
     name = StringField('نام فیلد (انگلیسی)', validators=[DataRequired(), Length(min=2, max=100)])
@@ -205,7 +198,13 @@ class CustomFieldForm(FlaskForm):
         ('Server', 'سرورها'),
         ('Task', 'تسک‌ها'),
         ('Content', 'محتوا'),
-        ('Backup', 'بکاپ‌ها')
+        ('Backup', 'بکاپ‌ها'),
+        ('SecurityProject', 'پروژه‌های امنیتی'),
+        ('Credential', 'اعتبارنامه‌ها'),
+        ('Bookmark', 'نشانک‌ها'),
+        ('Person', 'اشخاص'),
+        ('Attachment', 'پیوست‌ها'),
+        ('LookupItem', 'آیتم‌های مرجع')
     ], validators=[DataRequired()])
     is_required = BooleanField('اجباری')
     is_active = BooleanField('فعال', default=True)
@@ -233,7 +232,7 @@ class CustomFieldEditForm(FlaskForm):
     placeholder = StringField('متن راهنما', validators=[Optional(), Length(max=200)])
     help_text = TextAreaField('راهنمای اضافی', validators=[Optional()])
     order = StringField('ترتیب نمایش', validators=[Optional()])
-    options = TextAreaField('گزینه‌های انتخابی (هر خط یک گزینه)', validators=[Optional()])
+    options = TextAreaField('گزینه‌های انتخابی (هر خط یک گزینه)', validators=[Optional()], render_kw={'rows': 4, 'placeholder': 'هر خط یک گزینه\nمثال:\nگزینه 1\nگزینه 2\nگزینه 3'})
     submit = SubmitField('ذخیره')
 
 # فرم‌های مدیریت رمزها
@@ -311,4 +310,23 @@ class BookmarkEditForm(FlaskForm):
     url = StringField('لینک کامل (اختیاری)', validators=[Optional(), URL()])
     description = TextAreaField('توضیحات', validators=[Optional()])
     is_favorite = BooleanField('علاقه‌مندی')
+    submit = SubmitField('ذخیره')
+
+
+class PersonForm(FlaskForm):
+    category = SelectField('دسته‌بندی', choices=[('internal', 'داخلی'), ('external', 'سایر ادارات')], validators=[DataRequired()])
+    username = StringField('نام کاربری', validators=[DataRequired(), Length(min=1, max=120)])
+    dongle_name = StringField('نام دانگل', validators=[Optional(), Length(max=120)])
+    phone = StringField('شماره تماس', validators=[Optional(), Length(max=50)])
+    department = SelectField('واحد/اداره', choices=[], validators=[Optional()])
+    description = TextAreaField('توضیحات', validators=[Optional()])
+    submit = SubmitField('ذخیره')
+
+class PersonEditForm(FlaskForm):
+    category = SelectField('دسته‌بندی', choices=[('internal', 'داخلی'), ('external', 'سایر ادارات')], validators=[DataRequired()])
+    username = StringField('نام کاربری', validators=[DataRequired(), Length(min=1, max=120)])
+    dongle_name = StringField('نام دانگل', validators=[Optional(), Length(max=120)])
+    phone = StringField('شماره تماس', validators=[Optional(), Length(max=50)])
+    department = SelectField('واحد/اداره', choices=[], validators=[Optional()])
+    description = TextAreaField('توضیحات', validators=[Optional()])
     submit = SubmitField('ذخیره')

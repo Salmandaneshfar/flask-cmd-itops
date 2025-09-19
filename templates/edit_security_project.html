@@ -208,6 +208,9 @@
             <button type="submit" class="btn btn-primary">
               <i class="fas fa-save"></i> ذخیره تغییرات
             </button>
+            <a href="{{ url_for('attachments', model_name='SecurityProject', record_id=project.id) }}" class="btn btn-outline-info">
+              <i class="fas fa-paperclip"></i> پیوست‌ها
+            </a>
             <a href="{{ url_for('security_projects') }}" class="btn btn-secondary">
               <i class="fas fa-arrow-right"></i> بازگشت
             </a>

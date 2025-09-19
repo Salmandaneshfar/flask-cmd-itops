@@ -88,10 +88,10 @@
             <i class="fas fa-file-alt"></i>
           </div>
           <div class="flex-grow-1">
-            <h3 class="stats-number counter" data-target="{{ stats.content_count }}">0</h3>
-            <p class="stats-label">محتوا</p>
+            <h3 class="stats-number counter" data-target="{{ stats.projects_count }}">0</h3>
+            <p class="stats-label">پروژه‌های امنیتی</p>
             <small class="stats-change text-success">
-              <i class="fas fa-check"></i> {{ stats.published_content }} منتشر شده
+              <i class="fas fa-shield-alt"></i> تعداد کل پروژه‌ها
             </small>
           </div>
         </div>
@@ -146,47 +146,7 @@
     </div>
   </div>
   
-  <div class="col-lg-6 mb-4">
-    <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <h6 class="mb-0">
-          <i class="fas fa-file-alt text-info"></i> محتوای اخیر
-        </h6>
-        <a href="{{ url_for('content') }}" class="btn btn-sm btn-outline-primary">مشاهده همه</a>
-      </div>
-      <div class="card-body p-0">
-        {% if recent_content %}
-          {% for content in recent_content %}
-            <div class="activity-item activity-{{ 'success' if content.status == 'published' else 'warning' if content.status == 'draft' else 'info' }}">
-              <div class="d-flex align-items-center">
-                <div class="activity-icon">
-                  <i class="fas fa-{{ 'check-circle' if content.status == 'published' else 'edit' if content.status == 'draft' else 'archive' }}"></i>
-                </div>
-                <div class="flex-grow-1">
-                  <h6 class="mb-1">{{ content.title }}</h6>
-                  <small class="text-muted">
-                    <i class="fas fa-calendar"></i> {{ content.created_at.strftime('%Y/%m/%d %H:%M') }}
-                    | <i class="fas fa-user"></i> {{ content.author.username }}
-                  </small>
-                </div>
-                <div>
-                  <span class="badge bg-{{ 'success' if content.status == 'published' else 'warning' if content.status == 'draft' else 'secondary' }}">
-                    {{ content.status }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          {% endfor %}
-        {% else %}
-          <div class="text-center py-4">
-            <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
-            <p class="text-muted">هیچ محتوایی یافت نشد</p>
-            <a href="{{ url_for('add_content') }}" class="btn btn-primary btn-sm">محتوا جدید ایجاد کنید</a>
-          </div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
+  {# کارت لاگ‌های اخیر فعالیت حذف شد بنا به درخواست کاربر #}
 </div>
 
 <!-- دسترسی سریع -->
@@ -282,7 +242,7 @@ function animateCounters() {
   const counters = document.querySelectorAll('.stats-number');
   
   counters.forEach(counter => {
-    const target = parseInt(counter.textContent);
+    const target = parseInt(counter.getAttribute('data-target')) || parseInt(counter.textContent) || 0;
     const duration = 2000; // 2 ثانیه
     const increment = target / (duration / 16); // 60 FPS
     let current = 0;
@@ -311,5 +271,7 @@ document.querySelectorAll('.stats-card').forEach(card => {
     this.style.transform = 'translateY(0) scale(1)';
   });
 });
+// کارت لاگ‌های اخیر فعالیت و رفرش خودکار حذف شد
+
 </script>
 {% endblock %}
