@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>تست منوی فیلدهای سفارشی</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    
+    .test-container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .sidebar-menu {
+      list-style: none;
+      padding: 0;
+      margin: 20px 0;
+    }
+    
+    .sidebar-menu li {
+      margin: 5px 0;
+    }
+    
+    .sidebar-menu a {
+      display: block;
+      padding: 10px 15px;
+      background: #007bff;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+    }
+    
+    .sidebar-menu a:hover {
+      background: #0056b3;
+    }
+    
+    .dropdown {
+      position: relative;
+    }
+    
+    .dropdown-toggle {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      text-decoration: none;
+    }
+    
+    .dropdown-toggle:hover {
+      text-decoration: none;
+    }
+    
+    .dropdown-toggle i.fa-chevron-down {
+      transition: transform 0.3s ease;
+      font-size: 0.8rem;
+    }
+    
+    .dropdown.open .dropdown-toggle i.fa-chevron-down {
+      transform: rotate(180deg);
+    }
+    
+    .dropdown-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      left: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      min-width: 200px;
+      z-index: 1000;
+      display: none;
+    }
+    
+    .dropdown:hover .dropdown-menu {
+      display: block;
+    }
+    
+    .dropdown.open .dropdown-menu {
+      display: block !important;
+    }
+    
+    .dropdown-menu li {
+      margin: 0;
+    }
+    
+    .dropdown-menu a {
+      display: block;
+      padding: 10px 15px;
+      color: #333;
+      text-decoration: none;
+      background: white;
+    }
+    
+    .dropdown-menu a:hover {
+      background: #f8f9fa;
+    }
+    
+    .test-result {
+      margin-top: 20px;
+      padding: 15px;
+      background: #e9ecef;
+      border-radius: 4px;
+      border-left: 4px solid #007bff;
+    }
+    
+    .success {
+      border-left-color: #28a745;
+      background: #d4edda;
+    }
+    
+    .error {
+      border-left-color: #dc3545;
+      background: #f8d7da;
+    }
+  </style>
+</head>
+<body>
+  <div class="test-container">
+    <h1>🔧 تست منوی فیلدهای سفارشی</h1>
+    
+    <p>این صفحه برای تست عملکرد منوی dropdown طراحی شده است:</p>
+    
+    <ul class="sidebar-menu">
+      <li class="dropdown" id="custom-fields-dropdown">
+        <a href="#" class="dropdown-toggle" id="custom-fields-toggle">
+          <i class="fas fa-cogs"></i> فیلدهای سفارشی 
+          <i class="fas fa-chevron-down"></i>
+        </a>
+        <ul class="dropdown-menu" id="custom-fields-menu">
+          <li><a href="/custom-fields"><i class="fas fa-cogs"></i> مدیریت فیلدها</a></li>
+          <li><a href="/lookups"><i class="fas fa-list"></i> لیست‌های کرکره‌ای</a></li>
+        </ul>
+      </li>
+    </ul>
+    
+    <div class="test-result" id="test-result">
+      <h3>📊 نتیجه تست:</h3>
+      <p id="test-status">منتظر کلیک...</p>
+      <div id="debug-info"></div>
+    </div>
+    
+    <div style="margin-top: 20px;">
+      <button onclick="testDropdown()" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">
+        🧪 تست خودکار
+      </button>
+      <button onclick="resetTest()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+        🔄 ریست
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // Simple dropdown function
+    function toggleDropdown(dropdownId) {
+      console.log('toggleDropdown called for:', dropdownId);
+      updateStatus('🔄 در حال پردازش کلیک...');
+      
+      const dropdown = document.getElementById(dropdownId);
+      if (!dropdown) {
+        console.error('Dropdown not found:', dropdownId);
+        updateStatus('❌ خطا: منوی مورد نظر پیدا نشد!', 'error');
+        return;
+      }
+      
+      const isOpen = dropdown.classList.contains('open');
+      console.log('Current state:', isOpen ? 'open' : 'closed');
+      
+      // Close all dropdowns
+      document.querySelectorAll('.dropdown').forEach(d => {
+        d.classList.remove('open');
+      });
+      
+      // Open current dropdown if it was closed
+      if (!isOpen) {
+        dropdown.classList.add('open');
+        console.log('Dropdown opened successfully');
+        updateStatus('✅ موفق: منو باز شد!', 'success');
+      } else {
+        console.log('Dropdown closed successfully');
+        updateStatus('✅ موفق: منو بسته شد!', 'success');
+      }
+    }
+    
+    function updateStatus(message, type = '') {
+      const statusEl = document.getElementById('test-status');
+      const resultEl = document.getElementById('test-result');
+      
+      statusEl.innerHTML = message;
+      
+      // Remove existing classes
+      resultEl.classList.remove('success', 'error');
+      
+      // Add new class if provided
+      if (type) {
+        resultEl.classList.add(type);
+      }
+    }
+    
+    function testDropdown() {
+      updateStatus('🧪 شروع تست خودکار...');
+      
+      setTimeout(() => {
+        const dropdown = document.getElementById('custom-fields-dropdown');
+        if (dropdown) {
+          updateStatus('✅ Dropdown پیدا شد', 'success');
+          
+          setTimeout(() => {
+            toggleDropdown('custom-fields-dropdown');
+          }, 500);
+        } else {
+          updateStatus('❌ Dropdown پیدا نشد', 'error');
+        }
+      }, 500);
+    }
+    
+    function resetTest() {
+      document.querySelectorAll('.dropdown').forEach(d => {
+        d.classList.remove('open');
+      });
+      updateStatus('🔄 تست ریست شد');
+    }
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.dropdown')) {
+        document.querySelectorAll('.dropdown').forEach(d => {
+          d.classList.remove('open');
+        });
+      }
+    });
+    
+    // بارگذاری صفحه
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('DOM loaded, checking dropdown...');
+      const dropdown = document.getElementById('custom-fields-dropdown');
+      const toggle = document.getElementById('custom-fields-toggle');
+      
+      if (dropdown) {
+        console.log('✅ Custom fields dropdown found');
+        updateStatus('✅ Dropdown آماده است - روی آن کلیک کنید');
+        
+        // Add click event listener
+        if (toggle) {
+          toggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('Dropdown clicked!');
+            toggleDropdown('custom-fields-dropdown');
+          });
+          console.log('✅ Event listener added to dropdown toggle');
+        } else {
+          console.log('❌ Toggle button not found');
+          updateStatus('❌ دکمه toggle پیدا نشد', 'error');
+        }
+      } else {
+        console.log('❌ Custom fields dropdown not found');
+        updateStatus('❌ Dropdown پیدا نشد', 'error');
+      }
+    });
+  </script>
+</body>
+</html>

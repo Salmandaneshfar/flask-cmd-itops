@@ -75,12 +75,14 @@
                 <td>{{ item.author.username }}</td>
                 <td>{{ item.created_at.strftime('%Y/%m/%d') }}</td>
                 <td>
-                  <a href="#" class="btn btn-sm btn-outline-primary">
-                    <i class="fas fa-edit"></i>
-                  </a>
-                  <a href="#" class="btn btn-sm btn-outline-danger">
-                    <i class="fas fa-trash"></i>
-                  </a>
+                  <div class="btn-group" role="group">
+                    <a href="{{ url_for('edit_content', id=item.id) }}" class="btn btn-sm btn-outline-primary" title="ویرایش">
+                      <i class="fas fa-edit"></i>
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteContent({{ item.id }})" title="حذف">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
                 </td>
               </tr>
             {% endfor %}
@@ -135,4 +137,26 @@
     {% endif %}
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deleteContent(contentId) {
+  if (confirm('آیا مطمئن هستید که می‌خواهید این محتوا را حذف کنید؟\nاین عمل قابل بازگشت نیست.')) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/content/delete/${contentId}`;
+    
+    // اضافه کردن CSRF token
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrf_token';
+    csrfInput.value = '{{ csrf_token() }}';
+    form.appendChild(csrfInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+</script>
 {% endblock %}

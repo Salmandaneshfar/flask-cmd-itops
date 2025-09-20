@@ -172,83 +172,6 @@
       box-shadow: var(--shadow-md);
     }
     
-    /* Dropdown menu styles */
-    .sidebar-menu .dropdown {
-      position: relative;
-    }
-    
-    .sidebar-menu .dropdown-toggle {
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      text-decoration: none;
-    }
-    
-    .sidebar-menu .dropdown-toggle:hover {
-      text-decoration: none;
-    }
-    
-    .sidebar-menu .dropdown-toggle i.fa-chevron-down {
-      transition: transform 0.3s ease;
-      font-size: 0.8rem;
-    }
-    
-    .sidebar-menu .dropdown.open .dropdown-toggle i.fa-chevron-down {
-      transform: rotate(180deg);
-    }
-    
-    .sidebar-menu .dropdown-menu {
-      position: absolute;
-      top: 100%;
-      right: 0;
-      left: 0;
-      background: rgba(255, 255, 255, 0.15);
-      -webkit-backdrop-filter: blur(20px);
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 8px;
-      margin: 0.5rem 0.8rem;
-      padding: 0.5rem 0;
-      list-style: none;
-      display: none;
-      z-index: 1000;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      min-width: 200px;
-    }
-    
-    .sidebar-menu .dropdown:hover .dropdown-menu {
-      display: block;
-    }
-    
-    .sidebar-menu .dropdown.open .dropdown-menu {
-      display: block !important;
-    }
-    
-    .sidebar-menu .dropdown.open .dropdown-toggle i.fa-chevron-down {
-      transform: rotate(180deg);
-    }
-    
-    .sidebar-menu .dropdown-menu li {
-      margin: 0;
-    }
-    
-    .sidebar-menu .dropdown-menu a {
-      padding: 0.5rem 1rem;
-      margin: 0.1rem 0.5rem;
-      border-radius: 6px;
-      font-size: 0.8rem;
-      display: block;
-      text-decoration: none;
-      color: inherit;
-    }
-    
-    .sidebar-menu .dropdown-menu a:hover {
-      background: rgba(255, 255, 255, 0.25);
-      transform: translateX(-2px);
-      text-decoration: none;
-      color: inherit;
-    }
     
     /* دکمه خروج جداگانه */
     .sidebar-footer {
@@ -965,17 +888,10 @@
       <li><a href="{{ url_for('people') }}"><i class="fas fa-id-badge"></i> یوزرهای سامانه</a></li>
       <li><a href="{{ url_for('credentials') }}"><i class="fas fa-key"></i> مدیریت رمزها</a></li>
       <li><a href="{{ url_for('bookmarks') }}"><i class="fas fa-bookmark"></i> بوکمارک‌ها</a></li>
+      <li><a href="{{ url_for('content') }}"><i class="fas fa-file-alt"></i> مدیریت محتوا</a></li>
+      <li><a href="{{ url_for('custom_fields') }}"><i class="fas fa-cogs"></i> مدیریت فیلدها</a></li>
+      <li><a href="{{ url_for('lookups') }}"><i class="fas fa-list"></i> فهرست‌های انتخابی</a></li>
       {% if current_user.role == 'admin' %}
-      <li class="dropdown" id="custom-fields-dropdown">
-        <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
-          <i class="fas fa-cogs"></i> فیلدهای سفارشی 
-          <i class="fas fa-chevron-down"></i>
-        </a>
-        <ul class="dropdown-menu" id="custom-fields-menu">
-          <li><a href="{{ url_for('custom_fields') }}" target="_blank"><i class="fas fa-cogs"></i> مدیریت فیلدها</a></li>
-          <li><a href="{{ url_for('lookups') }}" target="_blank"><i class="fas fa-list"></i> لیست‌های کرکره‌ای</a></li>
-        </ul>
-      </li>
       <li><a href="{{ url_for('backups') }}"><i class="fas fa-database"></i> مدیریت بکاپ</a></li>
       <li><a href="{{ url_for('activity_logs') }}"><i class="fas fa-clipboard-list"></i> لاگ فعالیت‌ها</a></li>
       {% endif %}
@@ -1055,54 +971,6 @@
   <script src="{{ url_for('static', filename='static/js/jquery.min.js') }}"></script>
   <script src="{{ url_for('static', filename='static/js/bootstrap.bundle.min.js') }}"></script>
   
-  <script>
-    // Dropdown functionality using vanilla JavaScript
-    document.addEventListener('DOMContentLoaded', function() {
-      console.log('DOM loaded, initializing dropdowns');
-      
-      // Handle dropdown toggle
-      document.addEventListener('click', function(e) {
-        if (e.target.closest('.dropdown-toggle')) {
-          e.preventDefault();
-          e.stopPropagation();
-          
-          console.log('Dropdown toggle clicked');
-          
-          const dropdown = e.target.closest('.dropdown');
-          const isOpen = dropdown.classList.contains('open');
-          
-          console.log('Current state:', isOpen ? 'open' : 'closed');
-          
-          // Close all dropdowns
-          document.querySelectorAll('.dropdown').forEach(d => {
-            d.classList.remove('open');
-          });
-          
-          // Open current dropdown if it was closed
-          if (!isOpen) {
-            dropdown.classList.add('open');
-            console.log('Dropdown opened');
-          } else {
-            console.log('Dropdown closed');
-          }
-        }
-        
-        // Close dropdown when clicking outside
-        if (!e.target.closest('.dropdown')) {
-          document.querySelectorAll('.dropdown').forEach(d => {
-            d.classList.remove('open');
-          });
-        }
-      });
-      
-      // Prevent dropdown from closing when clicking inside menu
-      document.addEventListener('click', function(e) {
-        if (e.target.closest('.dropdown-menu')) {
-          e.stopPropagation();
-        }
-      });
-    });
-  </script>
   
   <script>
     // سیستم نوتیفیکیشن
@@ -1166,6 +1034,7 @@
         });
     }
     
+    
     // بارگذاری نوتیفیکیشن‌ها هنگام بارگذاری صفحه
     document.addEventListener('DOMContentLoaded', function() {
       loadNotifications();
@@ -1174,10 +1043,14 @@
       setInterval(loadNotifications, 30000);
       
       // رویداد کلیک برای "همه را خوانده شده"
-      document.getElementById('markAllRead').addEventListener('click', function(e) {
-        e.stopPropagation();
-        markAllAsRead();
-      });
+      const markAllReadBtn = document.getElementById('markAllRead');
+      if (markAllReadBtn) {
+        markAllReadBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          markAllAsRead();
+        });
+      }
+      
     });
   </script>
   

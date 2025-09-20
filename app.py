@@ -67,15 +67,16 @@ def create_app(config_name='default'):
     # Register custom fields blueprint
     app.register_blueprint(custom_fields_bp)
     
-    # Test route for debugging dropdowns
-    @app.route('/test-dropdown')
-    def test_dropdown():
-        return render_template('test_dropdown.html')
-    
     # Test route to check template changes
     @app.route('/test-template')
     def test_template():
         return render_template('base.html')
+    
+    # Final dropdown test route
+    @app.route('/test-dropdown-final')
+    def test_dropdown_final():
+        return render_template('test_dropdown_final.html')
+    
     
     # Comprehensive test route for all fields
     @app.route('/test-all-fields')
@@ -833,6 +834,43 @@ def create_app(config_name='default'):
             return redirect(url_for('content'))
         
         return render_template('add_content.html', form=form)
+    
+    @app.route('/content/edit/<int:id>', methods=['GET', 'POST'])
+    @login_required
+    def edit_content(id):
+        content = Content.query.get_or_404(id)
+        form = ContentForm(obj=content)
+        
+        if form.validate_on_submit():
+            content.title = form.title.data
+            content.content = form.content.data
+            content.slug = form.slug.data
+            content.content_type = form.content_type.data
+            content.status = form.status.data
+            
+            if form.status.data == 'published' and content.status != 'published':
+                content.published_at = datetime.utcnow()
+            
+            db.session.commit()
+            flash('محتوا با موفقیت ویرایش شد.', 'success')
+            return redirect(url_for('content'))
+        
+        return render_template('edit_content.html', form=form, content=content)
+    
+    @app.route('/content/delete/<int:id>', methods=['POST'])
+    @login_required
+    def delete_content(id):
+        content = Content.query.get_or_404(id)
+        
+        # بررسی دسترسی - فقط نویسنده یا ادمین می‌تواند حذف کند
+        if content.author_id != current_user.id and current_user.role != 'admin':
+            flash('شما دسترسی لازم را ندارید.', 'error')
+            return redirect(url_for('content'))
+        
+        db.session.delete(content)
+        db.session.commit()
+        flash('محتوا با موفقیت حذف شد.', 'success')
+        return redirect(url_for('content'))
     
     # Backup management routes
     @app.route('/backups')
