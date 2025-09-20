@@ -1037,26 +1037,38 @@
   <script src="{{ url_for('static', filename='static/js/bootstrap.bundle.min.js') }}"></script>
   
   <script>
-    // Simple dropdown menu functionality
-    document.addEventListener('DOMContentLoaded', function() {
-      const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
+    // jQuery dropdown functionality
+    $(document).ready(function() {
+      console.log('jQuery ready, setting up dropdowns...');
       
-      dropdownToggles.forEach(toggle => {
-        toggle.addEventListener('click', function(e) {
-          e.preventDefault();
-          const dropdown = this.parentElement;
-          const isOpen = dropdown.classList.contains('open');
-          
-          // Close all dropdowns
-          document.querySelectorAll('.dropdown').forEach(d => {
-            d.classList.remove('open');
-          });
-          
-          // Open current dropdown if it was closed
-          if (!isOpen) {
-            dropdown.classList.add('open');
-          }
-        });
+      $('.dropdown-toggle').on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        console.log('Dropdown clicked!', this);
+        
+        const $dropdown = $(this).closest('.dropdown');
+        const isOpen = $dropdown.hasClass('open');
+        
+        console.log('Current state:', isOpen ? 'open' : 'closed');
+        
+        // Close all dropdowns
+        $('.dropdown').removeClass('open');
+        
+        // Open current dropdown if it was closed
+        if (!isOpen) {
+          $dropdown.addClass('open');
+          console.log('Dropdown opened');
+        } else {
+          console.log('Dropdown closed');
+        }
+      });
+      
+      // Close dropdown when clicking outside
+      $(document).on('click', function(e) {
+        if (!$(e.target).closest('.dropdown').length) {
+          $('.dropdown').removeClass('open');
+        }
       });
     });
   </script>
