@@ -1056,35 +1056,50 @@
   <script src="{{ url_for('static', filename='static/js/bootstrap.bundle.min.js') }}"></script>
   
   <script>
-    // Dropdown functionality using jQuery
-    $(document).ready(function() {
+    // Dropdown functionality using vanilla JavaScript
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('DOM loaded, initializing dropdowns');
+      
       // Handle dropdown toggle
-      $('.dropdown-toggle').on('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
+      document.addEventListener('click', function(e) {
+        if (e.target.closest('.dropdown-toggle')) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          console.log('Dropdown toggle clicked');
+          
+          const dropdown = e.target.closest('.dropdown');
+          const isOpen = dropdown.classList.contains('open');
+          
+          console.log('Current state:', isOpen ? 'open' : 'closed');
+          
+          // Close all dropdowns
+          document.querySelectorAll('.dropdown').forEach(d => {
+            d.classList.remove('open');
+          });
+          
+          // Open current dropdown if it was closed
+          if (!isOpen) {
+            dropdown.classList.add('open');
+            console.log('Dropdown opened');
+          } else {
+            console.log('Dropdown closed');
+          }
+        }
         
-        const dropdown = $(this).closest('.dropdown');
-        const isOpen = dropdown.hasClass('open');
-        
-        // Close all dropdowns
-        $('.dropdown').removeClass('open');
-        
-        // Open current dropdown if it was closed
-        if (!isOpen) {
-          dropdown.addClass('open');
+        // Close dropdown when clicking outside
+        if (!e.target.closest('.dropdown')) {
+          document.querySelectorAll('.dropdown').forEach(d => {
+            d.classList.remove('open');
+          });
         }
       });
       
-      // Close dropdown when clicking outside
-      $(document).on('click', function(e) {
-        if (!$(e.target).closest('.dropdown').length) {
-          $('.dropdown').removeClass('open');
+      // Prevent dropdown from closing when clicking inside menu
+      document.addEventListener('click', function(e) {
+        if (e.target.closest('.dropdown-menu')) {
+          e.stopPropagation();
         }
-      });
-      
-      // Prevent dropdown from closing when clicking inside
-      $('.dropdown-menu').on('click', function(e) {
-        e.stopPropagation();
       });
     });
   </script>
