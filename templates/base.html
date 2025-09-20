@@ -179,12 +179,19 @@
     
     .sidebar-menu .dropdown-toggle {
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      text-decoration: none;
+    }
+    
+    .sidebar-menu .dropdown-toggle:hover {
+      text-decoration: none;
     }
     
     .sidebar-menu .dropdown-toggle i.fa-chevron-down {
-      float: left;
-      margin-left: 0.5rem;
       transition: transform 0.3s ease;
+      font-size: 0.8rem;
     }
     
     .sidebar-menu .dropdown.open .dropdown-toggle i.fa-chevron-down {
@@ -231,11 +238,16 @@
       margin: 0.1rem 0.5rem;
       border-radius: 6px;
       font-size: 0.8rem;
+      display: block;
+      text-decoration: none;
+      color: inherit;
     }
     
     .sidebar-menu .dropdown-menu a:hover {
       background: rgba(255, 255, 255, 0.25);
       transform: translateX(-2px);
+      text-decoration: none;
+      color: inherit;
     }
     
     /* دکمه خروج جداگانه */
@@ -955,7 +967,7 @@
       <li><a href="{{ url_for('bookmarks') }}"><i class="fas fa-bookmark"></i> بوکمارک‌ها</a></li>
       {% if current_user.role == 'admin' %}
       <li class="dropdown" id="custom-fields-dropdown">
-        <a href="javascript:void(0)" class="dropdown-toggle" onclick="toggleDropdown('custom-fields-dropdown')">
+        <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
           <i class="fas fa-cogs"></i> فیلدهای سفارشی 
           <i class="fas fa-chevron-down"></i>
         </a>
@@ -1044,40 +1056,36 @@
   <script src="{{ url_for('static', filename='static/js/bootstrap.bundle.min.js') }}"></script>
   
   <script>
-    // Simple dropdown function
-    function toggleDropdown(dropdownId) {
-      console.log('toggleDropdown called for:', dropdownId);
-      
-      const dropdown = document.getElementById(dropdownId);
-      if (!dropdown) {
-        console.log('Dropdown not found:', dropdownId);
-        return;
-      }
-      
-      const isOpen = dropdown.classList.contains('open');
-      console.log('Current state:', isOpen ? 'open' : 'closed');
-      
-      // Close all dropdowns
-      document.querySelectorAll('.dropdown').forEach(d => {
-        d.classList.remove('open');
+    // Dropdown functionality using jQuery
+    $(document).ready(function() {
+      // Handle dropdown toggle
+      $('.dropdown-toggle').on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const dropdown = $(this).closest('.dropdown');
+        const isOpen = dropdown.hasClass('open');
+        
+        // Close all dropdowns
+        $('.dropdown').removeClass('open');
+        
+        // Open current dropdown if it was closed
+        if (!isOpen) {
+          dropdown.addClass('open');
+        }
       });
       
-      // Open current dropdown if it was closed
-      if (!isOpen) {
-        dropdown.classList.add('open');
-        console.log('Dropdown opened');
-      } else {
-        console.log('Dropdown closed');
-      }
-    }
-    
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function(e) {
-      if (!e.target.closest('.dropdown')) {
-        document.querySelectorAll('.dropdown').forEach(d => {
-          d.classList.remove('open');
-        });
-      }
+      // Close dropdown when clicking outside
+      $(document).on('click', function(e) {
+        if (!$(e.target).closest('.dropdown').length) {
+          $('.dropdown').removeClass('open');
+        }
+      });
+      
+      // Prevent dropdown from closing when clicking inside
+      $('.dropdown-menu').on('click', function(e) {
+        e.stopPropagation();
+      });
     });
   </script>
   
