@@ -25,6 +25,11 @@ def create_app(config_name='default'):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
     
+    # Disable template caching in development
+    if config_name == 'development':
+        app.config['TEMPLATES_AUTO_RELOAD'] = True
+        app.jinja_env.auto_reload = True
+    
     # Initialize extensions
     db.init_app(app)
     
@@ -66,6 +71,11 @@ def create_app(config_name='default'):
     @app.route('/test-dropdown')
     def test_dropdown():
         return render_template('test_dropdown.html')
+    
+    # Test route to check template changes
+    @app.route('/test-template')
+    def test_template():
+        return render_template('base.html')
     
     # Comprehensive test route for all fields
     @app.route('/test-all-fields')
