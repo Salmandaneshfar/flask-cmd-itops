@@ -207,6 +207,10 @@
       min-width: 200px;
     }
     
+    .sidebar-menu .dropdown:hover .dropdown-menu {
+      display: block;
+    }
+    
     .sidebar-menu .dropdown.open .dropdown-menu {
       display: block;
     }
@@ -1033,48 +1037,26 @@
   <script src="{{ url_for('static', filename='static/js/bootstrap.bundle.min.js') }}"></script>
   
   <script>
-    // Dropdown menu functionality
+    // Simple dropdown menu functionality
     document.addEventListener('DOMContentLoaded', function() {
-      console.log('Dropdown script loaded');
-      
       const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
-      console.log('Found dropdown toggles:', dropdownToggles.length);
       
-      dropdownToggles.forEach((toggle, index) => {
-        console.log(`Setting up dropdown ${index + 1}`);
-        
+      dropdownToggles.forEach(toggle => {
         toggle.addEventListener('click', function(e) {
           e.preventDefault();
-          e.stopPropagation();
-          
-          console.log('Dropdown clicked');
-          const dropdown = this.closest('.dropdown');
+          const dropdown = this.parentElement;
           const isOpen = dropdown.classList.contains('open');
           
-          console.log('Current state:', isOpen ? 'open' : 'closed');
-          
-          // Close all other dropdowns
+          // Close all dropdowns
           document.querySelectorAll('.dropdown').forEach(d => {
             d.classList.remove('open');
           });
           
-          // Toggle current dropdown
+          // Open current dropdown if it was closed
           if (!isOpen) {
             dropdown.classList.add('open');
-            console.log('Dropdown opened');
-          } else {
-            console.log('Dropdown closed');
           }
         });
-      });
-      
-      // Close dropdown when clicking outside
-      document.addEventListener('click', function(e) {
-        if (!e.target.closest('.dropdown')) {
-          document.querySelectorAll('.dropdown').forEach(d => {
-            d.classList.remove('open');
-          });
-        }
       });
     });
   </script>
