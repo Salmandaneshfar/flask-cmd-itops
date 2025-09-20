@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+
+{% block title %}لاگ‌های پیامک{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header">
+                <h1><i class="fas fa-list-alt"></i> لاگ‌های ارسال پیامک</h1>
+                <p class="text-muted">تاریخچه و وضعیت ارسال پیامک‌ها</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- فیلترها -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="GET" class="form-inline">
+                        <div class="form-group mr-3">
+                            <label for="status" class="mr-2">وضعیت:</label>
+                            <select class="form-control" id="status" name="status">
+                                <option value="">همه</option>
+                                <option value="sent" {% if request.args.get('status') == 'sent' %}selected{% endif %}>ارسال شده</option>
+                                <option value="failed" {% if request.args.get('status') == 'failed' %}selected{% endif %}>ناموفق</option>
+                                <option value="pending" {% if request.args.get('status') == 'pending' %}selected{% endif %}>در انتظار</option>
+                            </select>
+                        </div>
+                        <div class="form-group mr-3">
+                            <label for="provider" class="mr-2">ارائه‌دهنده:</label>
+                            <select class="form-control" id="provider" name="provider">
+                                <option value="">همه</option>
+                                <option value="kavenegar" {% if request.args.get('provider') == 'kavenegar' %}selected{% endif %}>کاوه‌نگار</option>
+                                <option value="melipayamak" {% if request.args.get('provider') == 'melipayamak' %}selected{% endif %}>ملی‌پیامک</option>
+                                <option value="sms_ir" {% if request.args.get('provider') == 'sms_ir' %}selected{% endif %}>SMS.ir</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-filter"></i> فیلتر
+                        </button>
+                        <a href="{{ url_for('freeipa_sms_logs') }}" class="btn btn-outline-secondary mr-2">
+                            <i class="fas fa-times"></i> پاک کردن
+                        </a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- جدول لاگ‌ها -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-list"></i> تاریخچه پیامک‌ها</h5>
+                </div>
+                <div class="card-body">
+                    {% if logs.items %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>کاربر</th>
+                                        <th>شماره</th>
+                                        <th>پیام</th>
+                                        <th>ارائه‌دهنده</th>
+                                        <th>وضعیت</th>
+                                        <th>هزینه</th>
+                                        <th>تاریخ</th>
+                                        <th>عملیات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for log in logs.items %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ log.user.uid if log.user else 'نامشخص' }}</strong>
+                                        </td>
+                                        <td>
+                                            <a href="tel:{{ log.phone_number }}">{{ log.phone_number }}</a>
+                                        </td>
+                                        <td>
+                                            <div class="message-preview">
+                                                {{ log.message[:50] }}{% if log.message|length > 50 %}...{% endif %}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-info">{{ log.provider }}</span>
+                                        </td>
+                                        <td>
+                                            {% if log.status == 'sent' %}
+                                                <span class="badge badge-success">ارسال شده</span>
+                                            {% elif log.status == 'failed' %}
+                                                <span class="badge badge-danger">ناموفق</span>
+                                            {% else %}
+                                                <span class="badge badge-warning">در انتظار</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if log.cost %}
+                                                {{ "%.2f"|format(log.cost) }} تومان
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ log.created_at.strftime('%Y/%m/%d %H:%M') }}</td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-outline-info" 
+                                                    data-toggle="modal" data-target="#viewLogModal{{ log.id }}" title="مشاهده جزئیات">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+
+                                    <!-- Modal مشاهده جزئیات -->
+                                    <div class="modal fade" id="viewLogModal{{ log.id }}" tabindex="-1">
+                                        <div class="modal-dialog modal-lg">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">جزئیات پیامک</h5>
+                                                    <button type="button" class="close" data-dismiss="modal">
+                                                        <span>&times;</span>
+                                                    </button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <div class="row">
+                                                        <div class="col-md-6">
+                                                            <h6>اطلاعات کلی:</h6>
+                                                            <ul class="list-unstyled">
+                                                                <li><strong>کاربر:</strong> {{ log.user.uid if log.user else 'نامشخص' }}</li>
+                                                                <li><strong>شماره:</strong> {{ log.phone_number }}</li>
+                                                                <li><strong>ارائه‌دهنده:</strong> {{ log.provider }}</li>
+                                                                <li><strong>وضعیت:</strong> 
+                                                                    {% if log.status == 'sent' %}
+                                                                        <span class="badge badge-success">ارسال شده</span>
+                                                                    {% elif log.status == 'failed' %}
+                                                                        <span class="badge badge-danger">ناموفق</span>
+                                                                    {% else %}
+                                                                        <span class="badge badge-warning">در انتظار</span>
+                                                                    {% endif %}
+                                                                </li>
+                                                            </ul>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <h6>جزئیات فنی:</h6>
+                                                            <ul class="list-unstyled">
+                                                                <li><strong>Message ID:</strong> {{ log.message_id or 'نامشخص' }}</li>
+                                                                <li><strong>هزینه:</strong> {{ log.cost or 'نامشخص' }}</li>
+                                                                <li><strong>تاریخ ارسال:</strong> {{ log.sent_at.strftime('%Y/%m/%d %H:%M') if log.sent_at else 'ارسال نشده' }}</li>
+                                                                <li><strong>تاریخ ایجاد:</strong> {{ log.created_at.strftime('%Y/%m/%d %H:%M') }}</li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>پیام کامل:</label>
+                                                        <div class="message-content">
+                                                            {{ log.message }}
+                                                        </div>
+                                                    </div>
+                                                    {% if log.error_message %}
+                                                    <div class="form-group">
+                                                        <label class="text-danger">پیام خطا:</label>
+                                                        <div class="error-content">
+                                                            {{ log.error_message }}
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">بستن</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination -->
+                        {% if logs.pages > 1 %}
+                        <nav aria-label="صفحه‌بندی">
+                            <ul class="pagination justify-content-center">
+                                {% if logs.has_prev %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('freeipa_sms_logs', page=logs.prev_num, **request.args) }}">قبلی</a>
+                                    </li>
+                                {% endif %}
+                                
+                                {% for page_num in logs.iter_pages() %}
+                                    {% if page_num %}
+                                        {% if page_num != logs.page %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="{{ url_for('freeipa_sms_logs', page=page_num, **request.args) }}">{{ page_num }}</a>
+                                            </li>
+                                        {% else %}
+                                            <li class="page-item active">
+                                                <span class="page-link">{{ page_num }}</span>
+                                            </li>
+                                        {% endif %}
+                                    {% else %}
+                                        <li class="page-item disabled">
+                                            <span class="page-link">...</span>
+                                        </li>
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if logs.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('freeipa_sms_logs', page=logs.next_num, **request.args) }}">بعدی</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-sms fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">هیچ پیامکی یافت نشد</h5>
+                            <p class="text-muted">هنوز هیچ پیامکی ارسال نشده است</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.card-header {
+    background: rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 15px 15px 0 0;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #2d3748;
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.modal-content {
+    border-radius: 15px;
+    border: none;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.message-preview {
+    font-family: 'Courier New', monospace;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 0.3rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.message-content {
+    font-family: 'Courier New', monospace;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 1rem;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    border: 1px solid #e2e8f0;
+}
+
+.error-content {
+    background: rgba(220, 53, 69, 0.1);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid #dc3545;
+    color: #dc3545;
+    font-family: 'Courier New', monospace;
+}
+
+.pagination .page-link {
+    border-radius: 8px;
+    margin: 0 2px;
+    border: none;
+    color: #667eea;
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.pagination .page-item.active .page-link {
+    background: #667eea;
+    color: white;
+}
+
+.pagination .page-link:hover {
+    background: #667eea;
+    color: white;
+    transform: translateY(-1px);
+}
+</style>
+{% endblock %}

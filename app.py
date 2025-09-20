@@ -12,8 +12,9 @@ import redis
 
 from config import config
 from sqlalchemy import or_, text
-from models import db, User, Server, Task, Content, Backup, CustomField, CustomFieldValue, SecurityProject, Notification, Credential, Bookmark, Attachment, ActivityLog, Person, LookupItem
+from models import db, User, Server, Task, Content, Backup, CustomField, CustomFieldValue, SecurityProject, Notification, Credential, Bookmark, Attachment, ActivityLog, Person, LookupItem, FreeIPAServer, FreeIPAUser, FreeIPAGroup, FreeIPAUserGroup, UserPassword, SMSTemplate, SMSLog
 from app_custom_fields import custom_fields_bp
+from freeipa_service import FreeIPAManager
 from forms import (LoginForm, UserForm, EditUserForm, ChangePasswordForm, 
                   ServerForm, TaskForm, ContentForm, BackupForm,
                   CustomFieldForm, CustomFieldEditForm, SecurityProjectForm, SecurityProjectEditForm,
@@ -1704,6 +1705,425 @@ def create_app(config_name='default'):
     def internal_error(error):
         db.session.rollback()
         return render_template('500.html'), 500
+    
+    # FreeIPA Routes
+    @app.route('/freeipa')
+    @login_required
+    def freeipa_dashboard():
+        """داشبورد FreeIPA"""
+        try:
+            freeipa_manager = FreeIPAManager(db.session)
+            
+            # آمار کلی
+            total_users = db.session.query(FreeIPAUser).count()
+            total_groups = db.session.query(FreeIPAGroup).count()
+            active_servers = db.session.query(FreeIPAServer).filter_by(is_active=True).count()
+            
+            # آخرین فعالیت‌ها
+            recent_users = db.session.query(FreeIPAUser).order_by(FreeIPAUser.created_at.desc()).limit(5).all()
+            recent_sms = db.session.query(SMSLog).order_by(SMSLog.created_at.desc()).limit(5).all()
+            
+            return render_template('freeipa/dashboard.html',
+                                 total_users=total_users,
+                                 total_groups=total_groups,
+                                 active_servers=active_servers,
+                                 recent_users=recent_users,
+                                 recent_sms=recent_sms)
+        except Exception as e:
+            flash(f'خطا در بارگذاری داشبورد FreeIPA: {str(e)}', 'error')
+            return redirect(url_for('dashboard'))
+    
+    @app.route('/freeipa/servers')
+    @login_required
+    def freeipa_servers():
+        """لیست سرورهای FreeIPA"""
+        servers = db.session.query(FreeIPAServer).all()
+        return render_template('freeipa/servers.html', servers=servers)
+    
+    @app.route('/freeipa/servers/add', methods=['GET', 'POST'])
+    @login_required
+    def freeipa_add_server():
+        """اضافه کردن سرور FreeIPA"""
+        if request.method == 'POST':
+            try:
+                server = FreeIPAServer(
+                    name=request.form['name'],
+                    hostname=request.form['hostname'],
+                    port=int(request.form['port']),
+                    use_ssl=bool(request.form.get('use_ssl')),
+                    base_dn=request.form['base_dn'],
+                    bind_dn=request.form['bind_dn']
+                )
+                server.set_bind_password(request.form['bind_password'])
+                
+                db.session.add(server)
+                db.session.commit()
+                
+                flash('سرور FreeIPA با موفقیت اضافه شد', 'success')
+                return redirect(url_for('freeipa_servers'))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'خطا در اضافه کردن سرور: {str(e)}', 'error')
+        
+        return render_template('freeipa/add_server.html')
+    
+    @app.route('/freeipa/servers/test/<int:server_id>')
+    @login_required
+    def freeipa_test_server(server_id):
+        """تست اتصال سرور FreeIPA"""
+        try:
+            freeipa_manager = FreeIPAManager(db.session)
+            success, message = freeipa_manager.test_connection(server_id)
+            
+            if success:
+                flash('اتصال به سرور موفقیت‌آمیز بود', 'success')
+            else:
+                flash(f'خطا در اتصال: {message}', 'error')
+        except Exception as e:
+            flash(f'خطا در تست اتصال: {str(e)}', 'error')
+        
+        return redirect(url_for('freeipa_servers'))
+    
+    @app.route('/freeipa/servers/edit/<int:server_id>', methods=['GET', 'POST'])
+    @login_required
+    def freeipa_edit_server(server_id):
+        """ویرایش سرور FreeIPA"""
+        server = db.session.query(FreeIPAServer).get_or_404(server_id)
+        
+        if request.method == 'POST':
+            try:
+                server.name = request.form['name']
+                server.hostname = request.form['hostname']
+                server.port = int(request.form['port'])
+                server.use_ssl = bool(request.form.get('use_ssl'))
+                server.base_dn = request.form['base_dn']
+                server.bind_dn = request.form['bind_dn']
+                server.is_active = bool(request.form.get('is_active'))
+                
+                # تغییر پسورد اگر ارائه شده
+                new_password = request.form.get('bind_password')
+                if new_password:
+                    server.set_bind_password(new_password)
+                
+                db.session.commit()
+                flash('سرور با موفقیت به‌روزرسانی شد', 'success')
+                return redirect(url_for('freeipa_servers'))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'خطا در به‌روزرسانی سرور: {str(e)}', 'error')
+        
+        return render_template('freeipa/edit_server.html', server=server)
+    
+    @app.route('/freeipa/servers/delete/<int:server_id>', methods=['POST'])
+    @login_required
+    def freeipa_delete_server(server_id):
+        """حذف سرور FreeIPA"""
+        try:
+            server = db.session.query(FreeIPAServer).get_or_404(server_id)
+            db.session.delete(server)
+            db.session.commit()
+            flash('سرور با موفقیت حذف شد', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'خطا در حذف سرور: {str(e)}', 'error')
+        
+        return redirect(url_for('freeipa_servers'))
+    
+    @app.route('/freeipa/users')
+    @login_required
+    def freeipa_users():
+        """لیست کاربران FreeIPA"""
+        page = request.args.get('page', 1, type=int)
+        per_page = 20
+        
+        users = db.session.query(FreeIPAUser).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        return render_template('freeipa/users.html', users=users)
+    
+    @app.route('/freeipa/users/add', methods=['GET', 'POST'])
+    @login_required
+    def freeipa_add_user():
+        """اضافه کردن کاربر FreeIPA"""
+        if request.method == 'POST':
+            try:
+                freeipa_manager = FreeIPAManager(db.session)
+                
+                # دریافت گروه‌ها
+                groups = request.form.getlist('groups')
+                
+                success, message, password = freeipa_manager.create_user(
+                    uid=request.form['uid'],
+                    cn=request.form['cn'],
+                    sn=request.form['sn'],
+                    givenname=request.form['givenname'],
+                    mail=request.form['mail'],
+                    mobile=request.form.get('mobile'),
+                    groups=groups,
+                    send_sms=bool(request.form.get('send_sms'))
+                )
+                
+                if success:
+                    flash(f'کاربر با موفقیت ایجاد شد. رمز عبور: {password}', 'success')
+                    return redirect(url_for('freeipa_users'))
+                else:
+                    flash(f'خطا در ایجاد کاربر: {message}', 'error')
+            except Exception as e:
+                flash(f'خطا در ایجاد کاربر: {str(e)}', 'error')
+        
+        # دریافت لیست گروه‌ها
+        groups = db.session.query(FreeIPAGroup).filter_by(is_active=True).all()
+        return render_template('freeipa/add_user.html', groups=groups)
+    
+    @app.route('/freeipa/users/edit/<int:user_id>', methods=['GET', 'POST'])
+    @login_required
+    def freeipa_edit_user(user_id):
+        """ویرایش کاربر FreeIPA"""
+        user = db.session.query(FreeIPAUser).get_or_404(user_id)
+        
+        if request.method == 'POST':
+            try:
+                freeipa_manager = FreeIPAManager(db.session)
+                
+                success, message = freeipa_manager.update_user(
+                    user_id=user_id,
+                    cn=request.form['cn'],
+                    sn=request.form['sn'],
+                    givenname=request.form['givenname'],
+                    mail=request.form['mail'],
+                    mobile=request.form.get('mobile')
+                )
+                
+                if success:
+                    flash('کاربر با موفقیت به‌روزرسانی شد', 'success')
+                    return redirect(url_for('freeipa_users'))
+                else:
+                    flash(f'خطا در به‌روزرسانی: {message}', 'error')
+            except Exception as e:
+                flash(f'خطا در به‌روزرسانی: {str(e)}', 'error')
+        
+        return render_template('freeipa/edit_user.html', user=user)
+    
+    @app.route('/freeipa/users/change-password/<int:user_id>', methods=['POST'])
+    @login_required
+    def freeipa_change_password(user_id):
+        """تغییر پسورد کاربر FreeIPA"""
+        try:
+            freeipa_manager = FreeIPAManager(db.session)
+            
+            new_password = request.form.get('new_password')
+            send_sms = bool(request.form.get('send_sms'))
+            
+            success, message, password = freeipa_manager.change_password(
+                user_id=user_id,
+                new_password=new_password,
+                send_sms=send_sms
+            )
+            
+            if success:
+                flash(f'پسورد با موفقیت تغییر کرد. رمز جدید: {password}', 'success')
+            else:
+                flash(f'خطا در تغییر پسورد: {message}', 'error')
+        except Exception as e:
+            flash(f'خطا در تغییر پسورد: {str(e)}', 'error')
+        
+        return redirect(url_for('freeipa_users'))
+    
+    @app.route('/freeipa/users/passwords/<int:user_id>')
+    @login_required
+    def freeipa_user_passwords(user_id):
+        """لیست پسوردهای کاربر"""
+        user = db.session.query(FreeIPAUser).get_or_404(user_id)
+        freeipa_manager = FreeIPAManager(db.session)
+        passwords = freeipa_manager.get_user_passwords(user_id)
+        
+        return render_template('freeipa/user_passwords.html', user=user, passwords=passwords)
+    
+    @app.route('/freeipa/users/resend-sms/<int:password_id>', methods=['POST'])
+    @login_required
+    def freeipa_resend_sms(password_id):
+        """ارسال مجدد پیامک پسورد"""
+        try:
+            freeipa_manager = FreeIPAManager(db.session)
+            success, message = freeipa_manager.resend_password_sms(password_id)
+            
+            if success:
+                flash('پیامک با موفقیت ارسال شد', 'success')
+            else:
+                flash(f'خطا در ارسال پیامک: {message}', 'error')
+        except Exception as e:
+            flash(f'خطا در ارسال پیامک: {str(e)}', 'error')
+        
+        return redirect(request.referrer or url_for('freeipa_users'))
+    
+    @app.route('/freeipa/groups')
+    @login_required
+    def freeipa_groups():
+        """لیست گروه‌های FreeIPA"""
+        groups = db.session.query(FreeIPAGroup).all()
+        return render_template('freeipa/groups.html', groups=groups)
+    
+    @app.route('/freeipa/groups/add', methods=['GET', 'POST'])
+    @login_required
+    def freeipa_add_group():
+        """اضافه کردن گروه FreeIPA"""
+        if request.method == 'POST':
+            try:
+                freeipa_manager = FreeIPAManager(db.session)
+                
+                success, message = freeipa_manager.create_group(
+                    cn=request.form['cn'],
+                    description=request.form.get('description')
+                )
+                
+                if success:
+                    flash('گروه با موفقیت ایجاد شد', 'success')
+                    return redirect(url_for('freeipa_groups'))
+                else:
+                    flash(f'خطا در ایجاد گروه: {message}', 'error')
+            except Exception as e:
+                flash(f'خطا در ایجاد گروه: {str(e)}', 'error')
+        
+        return render_template('freeipa/add_group.html')
+    
+    @app.route('/freeipa/users/add-to-group/<int:user_id>', methods=['POST'])
+    @login_required
+    def freeipa_add_user_to_group(user_id):
+        """اضافه کردن کاربر به گروه"""
+        try:
+            freeipa_manager = FreeIPAManager(db.session)
+            
+            group_cn = request.form['group_cn']
+            success, message = freeipa_manager.add_user_to_group(user_id, group_cn)
+            
+            if success:
+                flash('کاربر با موفقیت به گروه اضافه شد', 'success')
+            else:
+                flash(f'خطا در اضافه کردن به گروه: {message}', 'error')
+        except Exception as e:
+            flash(f'خطا در اضافه کردن به گروه: {str(e)}', 'error')
+        
+        return redirect(request.referrer or url_for('freeipa_users'))
+    
+    @app.route('/freeipa/users/remove-from-group/<int:user_id>', methods=['POST'])
+    @login_required
+    def freeipa_remove_user_from_group(user_id):
+        """حذف کاربر از گروه"""
+        try:
+            freeipa_manager = FreeIPAManager(db.session)
+            
+            group_cn = request.form['group_cn']
+            success, message = freeipa_manager.remove_user_from_group(user_id, group_cn)
+            
+            if success:
+                flash('کاربر با موفقیت از گروه حذف شد', 'success')
+            else:
+                flash(f'خطا در حذف از گروه: {message}', 'error')
+        except Exception as e:
+            flash(f'خطا در حذف از گروه: {str(e)}', 'error')
+        
+        return redirect(request.referrer or url_for('freeipa_users'))
+    
+    @app.route('/freeipa/sync')
+    @login_required
+    def freeipa_sync():
+        """همگام‌سازی با FreeIPA"""
+        try:
+            freeipa_manager = FreeIPAManager(db.session)
+            success, message = freeipa_manager.sync_users_from_freeipa()
+            
+            if success:
+                flash(message, 'success')
+            else:
+                flash(f'خطا در همگام‌سازی: {message}', 'error')
+        except Exception as e:
+            flash(f'خطا در همگام‌سازی: {str(e)}', 'error')
+        
+        return redirect(url_for('freeipa_dashboard'))
+    
+    @app.route('/freeipa/sms-templates')
+    @login_required
+    def freeipa_sms_templates():
+        """لیست قالب‌های پیامک"""
+        templates = db.session.query(SMSTemplate).all()
+        return render_template('freeipa/sms_templates.html', templates=templates)
+    
+    @app.route('/freeipa/sms-templates/add', methods=['GET', 'POST'])
+    @login_required
+    def freeipa_add_sms_template():
+        """اضافه کردن قالب پیامک"""
+        if request.method == 'POST':
+            try:
+                template = SMSTemplate(
+                    name=request.form['name'],
+                    template=request.form['template'],
+                    is_active=bool(request.form.get('is_active'))
+                )
+                
+                # تنظیم متغیرها
+                variables = request.form.getlist('variables')
+                template.set_variables_list(variables)
+                
+                db.session.add(template)
+                db.session.commit()
+                
+                flash('قالب پیامک با موفقیت اضافه شد', 'success')
+                return redirect(url_for('freeipa_sms_templates'))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'خطا در اضافه کردن قالب: {str(e)}', 'error')
+        
+        return render_template('freeipa/add_sms_template.html')
+    
+    @app.route('/freeipa/sms-logs')
+    @login_required
+    def freeipa_sms_logs():
+        """لاگ‌های ارسال پیامک"""
+        page = request.args.get('page', 1, type=int)
+        per_page = 20
+        
+        logs = db.session.query(SMSLog).order_by(SMSLog.created_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        return render_template('freeipa/sms_logs.html', logs=logs)
+    
+    @app.route('/freeipa/sms-templates/edit/<int:template_id>', methods=['GET', 'POST'])
+    @login_required
+    def freeipa_edit_sms_template(template_id):
+        """ویرایش قالب پیامک"""
+        template = db.session.query(SMSTemplate).get_or_404(template_id)
+        
+        if request.method == 'POST':
+            try:
+                template.name = request.form['name']
+                template.template = request.form['template']
+                template.is_active = bool(request.form.get('is_active'))
+                
+                db.session.commit()
+                flash('قالب با موفقیت به‌روزرسانی شد', 'success')
+                return redirect(url_for('freeipa_sms_templates'))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'خطا در به‌روزرسانی قالب: {str(e)}', 'error')
+        
+        return render_template('freeipa/edit_sms_template.html', template=template)
+    
+    @app.route('/freeipa/sms-templates/delete/<int:template_id>', methods=['POST'])
+    @login_required
+    def freeipa_delete_sms_template(template_id):
+        """حذف قالب پیامک"""
+        try:
+            template = db.session.query(SMSTemplate).get_or_404(template_id)
+            db.session.delete(template)
+            db.session.commit()
+            flash('قالب با موفقیت حذف شد', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'خطا در حذف قالب: {str(e)}', 'error')
+        
+        return redirect(url_for('freeipa_sms_templates'))
     
     return app
 

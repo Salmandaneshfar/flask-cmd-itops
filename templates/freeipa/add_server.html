@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}افزودن سرور FreeIPA{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header">
+                <h1><i class="fas fa-server"></i> افزودن سرور FreeIPA</h1>
+                <p class="text-muted">تنظیم اتصال به سرور FreeIPA</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-cog"></i> تنظیمات سرور</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="name">نام سرور <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="name" name="name" required
+                                           placeholder="FreeIPA Server" value="{{ request.form.get('name', '') }}">
+                                    <small class="form-text text-muted">نام نمایشی برای سرور</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="hostname">آدرس سرور <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="hostname" name="hostname" required
+                                           placeholder="ipa.example.com" value="{{ request.form.get('hostname', '') }}">
+                                    <small class="form-text text-muted">IP یا دامنه سرور FreeIPA</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="port">پورت</label>
+                                    <input type="number" class="form-control" id="port" name="port" 
+                                           value="{{ request.form.get('port', '389') }}" min="1" max="65535">
+                                    <small class="form-text text-muted">پورت LDAP (پیش‌فرض: 389)</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <div class="form-check mt-4">
+                                        <input type="checkbox" class="form-check-input" id="use_ssl" name="use_ssl" 
+                                               {% if request.form.get('use_ssl') %}checked{% endif %}>
+                                        <label class="form-check-label" for="use_ssl">
+                                            <i class="fas fa-lock"></i> استفاده از SSL
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <div class="form-check mt-4">
+                                        <input type="checkbox" class="form-check-input" id="is_active" name="is_active" checked>
+                                        <label class="form-check-label" for="is_active">
+                                            <i class="fas fa-power-off"></i> سرور فعال
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="base_dn">Base DN <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="base_dn" name="base_dn" required
+                                           placeholder="dc=example,dc=com" value="{{ request.form.get('base_dn', '') }}">
+                                    <small class="form-text text-muted">مثال: dc=example,dc=com</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="bind_dn">Bind DN <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="bind_dn" name="bind_dn" required
+                                           placeholder="cn=admin,cn=users,dc=example,dc=com" value="{{ request.form.get('bind_dn', '') }}">
+                                    <small class="form-text text-muted">DN کاربر ادمین</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <label for="bind_password">رمز عبور <span class="text-danger">*</span></label>
+                                    <input type="password" class="form-control" id="bind_password" name="bind_password" required
+                                           placeholder="رمز عبور کاربر ادمین">
+                                    <small class="form-text text-muted">رمز عبور کاربر ادمین FreeIPA</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> ذخیره سرور
+                            </button>
+                            <a href="{{ url_for('freeipa_servers') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> انصراف
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- راهنما -->
+    <div class="row mt-4">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-info-circle"></i> راهنمای تنظیمات</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>تنظیمات اتصال:</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-check text-success"></i> از SSL برای اتصال امن استفاده کنید</li>
+                                <li><i class="fas fa-check text-success"></i> پورت 389 برای LDAP و 636 برای LDAPS</li>
+                                <li><i class="fas fa-check text-success"></i> Base DN معمولاً dc=domain,dc=com است</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>دسترسی ادمین:</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-check text-success"></i> Bind DN باید کاربر ادمین FreeIPA باشد</li>
+                                <li><i class="fas fa-check text-success"></i> رمز عبور باید معتبر باشد</li>
+                                <li><i class="fas fa-check text-success"></i> پس از ذخیره، اتصال تست خواهد شد</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.card-header {
+    background: rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 15px 15px 0 0;
+}
+
+.form-group label {
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 0.5rem;
+}
+
+.form-control {
+    border-radius: 10px;
+    border: 2px solid #e2e8f0;
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.form-check {
+    margin-bottom: 0.5rem;
+}
+
+.form-check-input {
+    margin-top: 0.25rem;
+}
+
+.form-actions {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.btn {
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.text-danger {
+    color: #e53e3e !important;
+}
+</style>
+{% endblock %}

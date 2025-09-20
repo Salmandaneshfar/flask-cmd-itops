@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block title %}قالب‌های پیامک{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header">
+                <h1><i class="fas fa-sms"></i> مدیریت قالب‌های پیامک</h1>
+                <p class="text-muted">تنظیم قالب‌های پیامک برای ارسال به کاربران</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- دکمه‌های عملیات -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <a href="{{ url_for('freeipa_add_sms_template') }}" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> افزودن قالب جدید
+                            </a>
+                        </div>
+                        <div class="col-md-6 text-left">
+                            <a href="{{ url_for('freeipa_dashboard') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-right"></i> بازگشت به داشبورد
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- جدول قالب‌ها -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-list"></i> لیست قالب‌ها</h5>
+                </div>
+                <div class="card-body">
+                    {% if templates %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>نام</th>
+                                        <th>قالب</th>
+                                        <th>وضعیت</th>
+                                        <th>تاریخ ایجاد</th>
+                                        <th>عملیات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for template in templates %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ template.name }}</strong>
+                                        </td>
+                                        <td>
+                                            <div class="template-preview">
+                                                {{ template.template[:100] }}{% if template.template|length > 100 %}...{% endif %}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {% if template.is_active %}
+                                                <span class="badge badge-success">فعال</span>
+                                            {% else %}
+                                                <span class="badge badge-secondary">غیرفعال</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ template.created_at.strftime('%Y/%m/%d') }}</td>
+                                        <td>
+                                            <div class="btn-group" role="group">
+                                                <button type="button" class="btn btn-sm btn-outline-info" 
+                                                        data-toggle="modal" data-target="#viewTemplateModal{{ template.id }}" title="مشاهده">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-warning" 
+                                                        data-toggle="modal" data-target="#editTemplateModal{{ template.id }}" title="ویرایش">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                        data-toggle="modal" data-target="#deleteTemplateModal{{ template.id }}" title="حذف">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                    <!-- Modal مشاهده قالب -->
+                                    <div class="modal fade" id="viewTemplateModal{{ template.id }}" tabindex="-1">
+                                        <div class="modal-dialog modal-lg">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">مشاهده قالب - {{ template.name }}</h5>
+                                                    <button type="button" class="close" data-dismiss="modal">
+                                                        <span>&times;</span>
+                                                    </button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <div class="form-group">
+                                                        <label>قالب پیامک:</label>
+                                                        <div class="template-content">
+                                                            {{ template.template }}
+                                                        </div>
+                                                    </div>
+                                                    {% if template.get_variables_list() %}
+                                                    <div class="form-group">
+                                                        <label>متغیرهای قابل استفاده:</label>
+                                                        <ul class="list-unstyled">
+                                                            {% for variable in template.get_variables_list() %}
+                                                            <li><code>{{ variable }}</code></li>
+                                                            {% endfor %}
+                                                        </ul>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">بستن</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Modal ویرایش قالب -->
+                                    <div class="modal fade" id="editTemplateModal{{ template.id }}" tabindex="-1">
+                                        <div class="modal-dialog modal-lg">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">ویرایش قالب - {{ template.name }}</h5>
+                                                    <button type="button" class="close" data-dismiss="modal">
+                                                        <span>&times;</span>
+                                                    </button>
+                                                </div>
+                                                <form method="POST" action="{{ url_for('freeipa_edit_sms_template', template_id=template.id) }}">
+                                                    <div class="modal-body">
+                                                        <div class="form-group">
+                                                            <label for="name{{ template.id }}">نام قالب</label>
+                                                            <input type="text" class="form-control" id="name{{ template.id }}" 
+                                                                   name="name" value="{{ template.name }}" required>
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <label for="template{{ template.id }}">قالب پیامک</label>
+                                                            <textarea class="form-control" id="template{{ template.id }}" 
+                                                                      name="template" rows="5" required>{{ template.template }}</textarea>
+                                                            <small class="form-text text-muted">
+                                                                از متغیرهای {username}, {password}, {fullname} استفاده کنید
+                                                            </small>
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <div class="form-check">
+                                                                <input type="checkbox" class="form-check-input" id="is_active{{ template.id }}" 
+                                                                       name="is_active" {% if template.is_active %}checked{% endif %}>
+                                                                <label class="form-check-label" for="is_active{{ template.id }}">
+                                                                    قالب فعال
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">انصراف</button>
+                                                        <button type="submit" class="btn btn-warning">ذخیره تغییرات</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Modal حذف قالب -->
+                                    <div class="modal fade" id="deleteTemplateModal{{ template.id }}" tabindex="-1">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">حذف قالب</h5>
+                                                    <button type="button" class="close" data-dismiss="modal">
+                                                        <span>&times;</span>
+                                                    </button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <p>آیا از حذف قالب <strong>{{ template.name }}</strong> اطمینان دارید؟</p>
+                                                    <p class="text-danger">این عمل قابل بازگشت نیست!</p>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">انصراف</button>
+                                                    <form method="POST" action="{{ url_for('freeipa_delete_sms_template', template_id=template.id) }}" style="display: inline;">
+                                                        <button type="submit" class="btn btn-danger">حذف</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-sms fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">هیچ قالبی یافت نشد</h5>
+                            <p class="text-muted">برای شروع، یک قالب پیامک اضافه کنید</p>
+                            <a href="{{ url_for('freeipa_add_sms_template') }}" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> افزودن قالب جدید
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.card-header {
+    background: rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 15px 15px 0 0;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #2d3748;
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.btn-group .btn {
+    margin-left: 2px;
+}
+
+.modal-content {
+    border-radius: 15px;
+    border: none;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.template-preview {
+    font-family: 'Courier New', monospace;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 0.5rem;
+    border-radius: 5px;
+    font-size: 0.9rem;
+}
+
+.template-content {
+    font-family: 'Courier New', monospace;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 1rem;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    border: 1px solid #e2e8f0;
+}
+</style>
+{% endblock %}

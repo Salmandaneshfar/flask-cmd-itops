@@ -297,6 +297,191 @@ class Bookmark(db.Model):
         return f'<Bookmark {self.name}>'
 
 
+# FreeIPA Models
+class FreeIPAServer(db.Model):
+    """تنظیمات سرور FreeIPA"""
+    __tablename__ = 'freeipaserver'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    hostname = db.Column(db.String(200), nullable=False)
+    port = db.Column(db.Integer, default=389)
+    use_ssl = db.Column(db.Boolean, default=True)
+    base_dn = db.Column(db.String(500), nullable=False)
+    bind_dn = db.Column(db.String(500), nullable=False)
+    bind_password = db.Column(db.Text, nullable=False)  # رمزنگاری شده
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_connection_test = db.Column(db.DateTime)
+    connection_status = db.Column(db.String(20), default='unknown')  # unknown, connected, failed
+    
+    def set_bind_password(self, password):
+        """رمزنگاری پسورد اتصال"""
+        from werkzeug.security import generate_password_hash
+        self.bind_password = generate_password_hash(password)
+    
+    def check_bind_password(self, password):
+        """بررسی پسورد اتصال"""
+        from werkzeug.security import check_password_hash
+        return check_password_hash(self.bind_password, password)
+    
+    def __repr__(self):
+        return f'<FreeIPAServer {self.name}>'
+
+
+class FreeIPAUser(db.Model):
+    """کاربران FreeIPA"""
+    __tablename__ = 'freeipauser'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    uid = db.Column(db.String(100), nullable=False, unique=True)  # نام کاربری FreeIPA
+    cn = db.Column(db.String(200), nullable=False)  # نام کامل
+    sn = db.Column(db.String(100), nullable=False)  # نام خانوادگی
+    givenname = db.Column(db.String(100), nullable=False)  # نام
+    mail = db.Column(db.String(200), nullable=False)  # ایمیل
+    mobile = db.Column(db.String(20))  # شماره موبایل
+    uid_number = db.Column(db.String(20))  # UID Number
+    gid_number = db.Column(db.String(20))  # GID Number
+    home_directory = db.Column(db.String(500))  # مسیر home
+    login_shell = db.Column(db.String(100), default='/bin/bash')
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_sync = db.Column(db.DateTime)  # آخرین همگام‌سازی با FreeIPA
+    
+    def __repr__(self):
+        return f'<FreeIPAUser {self.uid}>'
+
+
+class FreeIPAGroup(db.Model):
+    """گروه‌های FreeIPA"""
+    __tablename__ = 'freeipagroup'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    cn = db.Column(db.String(100), nullable=False, unique=True)  # نام گروه
+    description = db.Column(db.Text)  # توضیحات گروه
+    gid_number = db.Column(db.String(20))  # GID Number
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_sync = db.Column(db.DateTime)  # آخرین همگام‌سازی با FreeIPA
+    
+    def __repr__(self):
+        return f'<FreeIPAGroup {self.cn}>'
+
+
+class FreeIPAUserGroup(db.Model):
+    """رابطه کاربران و گروه‌های FreeIPA"""
+    __tablename__ = 'freeipausergroup'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('freeipauser.id'), nullable=False)
+    group_id = db.Column(db.Integer, db.ForeignKey('freeipagroup.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('FreeIPAUser', backref='user_groups')
+    group = db.relationship('FreeIPAGroup', backref='group_users')
+    
+    # Unique constraint
+    __table_args__ = (db.UniqueConstraint('user_id', 'group_id', name='uq_user_group'),)
+    
+    def __repr__(self):
+        return f'<FreeIPAUserGroup {self.user.uid} -> {self.group.cn}>'
+
+
+class UserPassword(db.Model):
+    """ذخیره پسوردهای کاربران برای ارسال پیامک"""
+    __tablename__ = 'userpassword'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('freeipauser.id'), nullable=False)
+    password = db.Column(db.Text, nullable=False)  # رمزنگاری شده
+    password_type = db.Column(db.String(20), default='initial')  # initial, reset, temporary
+    is_sent = db.Column(db.Boolean, default=False)  # آیا پیامک ارسال شده
+    sent_at = db.Column(db.DateTime)  # زمان ارسال پیامک
+    expires_at = db.Column(db.DateTime)  # زمان انقضا
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # کسی که پسورد را ایجاد کرده
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('FreeIPAUser', backref='passwords')
+    creator = db.relationship('User', backref='created_passwords')
+    
+    def set_password(self, password):
+        """رمزنگاری پسورد"""
+        from werkzeug.security import generate_password_hash
+        self.password = generate_password_hash(password)
+    
+    def check_password(self, password):
+        """بررسی پسورد"""
+        from werkzeug.security import check_password_hash
+        return check_password_hash(self.password, password)
+    
+    def is_expired(self):
+        """بررسی انقضای پسورد"""
+        if self.expires_at:
+            return datetime.utcnow() > self.expires_at
+        return False
+    
+    def __repr__(self):
+        return f'<UserPassword {self.user.uid} - {self.password_type}>'
+
+
+class SMSTemplate(db.Model):
+    """قالب‌های پیامک"""
+    __tablename__ = 'smstemplate'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    template = db.Column(db.Text, nullable=False)  # قالب پیامک
+    variables = db.Column(db.Text)  # متغیرهای قابل استفاده (JSON)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def get_variables_list(self):
+        """دریافت لیست متغیرها"""
+        import json
+        if self.variables:
+            try:
+                return json.loads(self.variables)
+            except:
+                return []
+        return []
+    
+    def set_variables_list(self, variables_list):
+        """تنظیم لیست متغیرها"""
+        import json
+        self.variables = json.dumps(variables_list) if variables_list else None
+    
+    def __repr__(self):
+        return f'<SMSTemplate {self.name}>'
+
+
+class SMSLog(db.Model):
+    """لاگ ارسال پیامک"""
+    __tablename__ = 'smslog'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('freeipauser.id'), nullable=False)
+    phone_number = db.Column(db.String(20), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    template_id = db.Column(db.Integer, db.ForeignKey('smstemplate.id'))
+    provider = db.Column(db.String(50), nullable=False)  # kavenegar, melipayamak, sms_ir
+    status = db.Column(db.String(20), nullable=False)  # sent, failed, pending
+    message_id = db.Column(db.String(100))  # ID پیام از سرویس دهنده
+    error_message = db.Column(db.Text)  # پیام خطا در صورت عدم ارسال
+    cost = db.Column(db.Float)  # هزینه ارسال
+    sent_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('FreeIPAUser', backref='sms_logs')
+    template = db.relationship('SMSTemplate', backref='sms_logs')
+    
+    def __repr__(self):
+        return f'<SMSLog {self.user.uid} - {self.status}>'
+
+
 class Attachment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     model_name = db.Column(db.String(50), nullable=False)

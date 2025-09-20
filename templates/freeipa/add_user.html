@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+
+{% block title %}افزودن کاربر FreeIPA{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header">
+                <h1><i class="fas fa-user-plus"></i> افزودن کاربر جدید</h1>
+                <p class="text-muted">ایجاد کاربر جدید در FreeIPA</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-user"></i> اطلاعات کاربر</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="uid">نام کاربری <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="uid" name="uid" required
+                                           placeholder="نام کاربری" value="{{ request.form.get('uid', '') }}">
+                                    <small class="form-text text-muted">نام کاربری برای ورود به سیستم</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="mail">ایمیل <span class="text-danger">*</span></label>
+                                    <input type="email" class="form-control" id="mail" name="mail" required
+                                           placeholder="user@example.com" value="{{ request.form.get('mail', '') }}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="givenname">نام <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="givenname" name="givenname" required
+                                           placeholder="نام" value="{{ request.form.get('givenname', '') }}">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="sn">نام خانوادگی <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="sn" name="sn" required
+                                           placeholder="نام خانوادگی" value="{{ request.form.get('sn', '') }}">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="cn">نام کامل <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="cn" name="cn" required
+                                           placeholder="نام کامل" value="{{ request.form.get('cn', '') }}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="mobile">شماره موبایل</label>
+                                    <input type="tel" class="form-control" id="mobile" name="mobile"
+                                           placeholder="09123456789" value="{{ request.form.get('mobile', '') }}">
+                                    <small class="form-text text-muted">برای ارسال پیامک</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>گروه‌ها</label>
+                                    {% if groups %}
+                                        <div class="form-check-group">
+                                            {% for group in groups %}
+                                            <div class="form-check">
+                                                <input type="checkbox" class="form-check-input" id="group{{ group.id }}" 
+                                                       name="groups" value="{{ group.cn }}">
+                                                <label class="form-check-label" for="group{{ group.id }}">
+                                                    {{ group.cn }}
+                                                    {% if group.description %}
+                                                        <small class="text-muted">({{ group.description }})</small>
+                                                    {% endif %}
+                                                </label>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <p class="text-muted">هیچ گروهی یافت نشد</p>
+                                        <a href="{{ url_for('freeipa_add_group') }}" class="btn btn-sm btn-outline-success">
+                                            <i class="fas fa-plus"></i> افزودن گروه
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="send_sms" name="send_sms" checked>
+                                        <label class="form-check-label" for="send_sms">
+                                            <i class="fas fa-sms"></i> ارسال پیامک با پسورد
+                                        </label>
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        پسورد به صورت خودکار تولید شده و از طریق پیامک ارسال می‌شود
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> ایجاد کاربر
+                            </button>
+                            <a href="{{ url_for('freeipa_users') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> انصراف
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- راهنما -->
+    <div class="row mt-4">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-info-circle"></i> راهنما</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li><i class="fas fa-check text-success"></i> نام کاربری باید منحصر به فرد باشد</li>
+                        <li><i class="fas fa-check text-success"></i> پسورد به صورت خودکار تولید می‌شود</li>
+                        <li><i class="fas fa-check text-success"></i> در صورت ارائه شماره موبایل، پسورد از طریق پیامک ارسال می‌شود</li>
+                        <li><i class="fas fa-check text-success"></i> کاربر می‌تواند با نام کاربری و پسورد به سیستم‌های احراز هویت FreeIPA وارد شود</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.card-header {
+    background: rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 15px 15px 0 0;
+}
+
+.form-group label {
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 0.5rem;
+}
+
+.form-control {
+    border-radius: 10px;
+    border: 2px solid #e2e8f0;
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.form-check-group {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.form-check {
+    margin-bottom: 0.5rem;
+}
+
+.form-check-input {
+    margin-top: 0.25rem;
+}
+
+.form-actions {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.btn {
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.text-danger {
+    color: #e53e3e !important;
+}
+</style>
+
+<script>
+// Auto-fill CN field when givenname and sn are filled
+document.addEventListener('DOMContentLoaded', function() {
+    const givennameField = document.getElementById('givenname');
+    const snField = document.getElementById('sn');
+    const cnField = document.getElementById('cn');
+    
+    function updateCN() {
+        const givenname = givennameField.value.trim();
+        const sn = snField.value.trim();
+        
+        if (givenname && sn) {
+            cnField.value = givenname + ' ' + sn;
+        }
+    }
+    
+    givennameField.addEventListener('input', updateCN);
+    snField.addEventListener('input', updateCN);
+});
+</script>
+{% endblock %}

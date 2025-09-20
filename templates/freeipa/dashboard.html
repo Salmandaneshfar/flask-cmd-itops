@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}داشبورد FreeIPA{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header">
+                <h1><i class="fas fa-user-shield"></i> مدیریت FreeIPA</h1>
+                <p class="text-muted">مدیریت کاربران، گروه‌ها و احراز هویت</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- آمار کلی -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>{{ total_users }}</h3>
+                    <p>کل کاربران</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-layer-group"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>{{ total_groups }}</h3>
+                    <p>کل گروه‌ها</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-server"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>{{ active_servers }}</h3>
+                    <p>سرورهای فعال</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- دکمه‌های عملیات سریع -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-bolt"></i> عملیات سریع</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-2">
+                            <a href="{{ url_for('freeipa_add_user') }}" class="btn btn-primary btn-block">
+                                <i class="fas fa-user-plus"></i> افزودن کاربر
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{{ url_for('freeipa_add_group') }}" class="btn btn-success btn-block">
+                                <i class="fas fa-layer-group"></i> افزودن گروه
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{{ url_for('freeipa_sync') }}" class="btn btn-info btn-block">
+                                <i class="fas fa-sync"></i> همگام‌سازی
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{{ url_for('freeipa_servers') }}" class="btn btn-warning btn-block">
+                                <i class="fas fa-cog"></i> تنظیمات سرور
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- آخرین کاربران -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-users"></i> آخرین کاربران</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_users %}
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>نام کاربری</th>
+                                        <th>نام کامل</th>
+                                        <th>ایمیل</th>
+                                        <th>تاریخ ایجاد</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for user in recent_users %}
+                                    <tr>
+                                        <td>{{ user.uid }}</td>
+                                        <td>{{ user.cn }}</td>
+                                        <td>{{ user.mail }}</td>
+                                        <td>{{ user.created_at.strftime('%Y/%m/%d') }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-center">
+                            <a href="{{ url_for('freeipa_users') }}" class="btn btn-outline-primary btn-sm">
+                                مشاهده همه کاربران
+                            </a>
+                        </div>
+                    {% else %}
+                        <p class="text-muted text-center">هیچ کاربری یافت نشد</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- آخرین پیامک‌ها -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-sms"></i> آخرین پیامک‌ها</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_sms %}
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>کاربر</th>
+                                        <th>شماره</th>
+                                        <th>وضعیت</th>
+                                        <th>تاریخ</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for sms in recent_sms %}
+                                    <tr>
+                                        <td>{{ sms.user.uid if sms.user else 'نامشخص' }}</td>
+                                        <td>{{ sms.phone_number }}</td>
+                                        <td>
+                                            {% if sms.status == 'sent' %}
+                                                <span class="badge badge-success">ارسال شده</span>
+                                            {% elif sms.status == 'failed' %}
+                                                <span class="badge badge-danger">ناموفق</span>
+                                            {% else %}
+                                                <span class="badge badge-warning">در انتظار</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ sms.created_at.strftime('%Y/%m/%d %H:%M') }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-center">
+                            <a href="{{ url_for('freeipa_sms_logs') }}" class="btn btn-outline-primary btn-sm">
+                                مشاهده همه پیامک‌ها
+                            </a>
+                        </div>
+                    {% else %}
+                        <p class="text-muted text-center">هیچ پیامکی ارسال نشده</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- منوی FreeIPA -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-th-large"></i> منوی FreeIPA</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <a href="{{ url_for('freeipa_users') }}" class="btn btn-outline-primary btn-block">
+                                <i class="fas fa-users"></i><br>
+                                <small>مدیریت کاربران</small>
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{{ url_for('freeipa_groups') }}" class="btn btn-outline-success btn-block">
+                                <i class="fas fa-layer-group"></i><br>
+                                <small>مدیریت گروه‌ها</small>
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{{ url_for('freeipa_servers') }}" class="btn btn-outline-warning btn-block">
+                                <i class="fas fa-server"></i><br>
+                                <small>تنظیمات سرور</small>
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{{ url_for('freeipa_sms_templates') }}" class="btn btn-outline-info btn-block">
+                                <i class="fas fa-sms"></i><br>
+                                <small>قالب‌های پیامک</small>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.stat-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 15px;
+    padding: 1.5rem;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+.stat-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    color: #667eea;
+}
+
+.stat-content h3 {
+    font-size: 2rem;
+    font-weight: bold;
+    margin: 0;
+    color: #2d3748;
+}
+
+.stat-content p {
+    color: #718096;
+    margin: 0.5rem 0 0 0;
+    font-size: 0.9rem;
+}
+
+.card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.card-header {
+    background: rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 15px 15px 0 0;
+}
+
+.btn-block {
+    border-radius: 10px;
+    padding: 0.8rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn-block:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+</style>
+{% endblock %}
