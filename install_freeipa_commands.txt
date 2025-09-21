@@ -1,0 +1,34 @@
+# دستورات برای اجرا روی سرور 192.168.0.36
+
+# مرحله 1: اتصال به سرور
+ssh mci@192.168.0.36
+
+# مرحله 2: حل مشکل DNS
+sudo echo "192.168.0.36 ipa.mci.local ipa" >> /etc/hosts
+
+# مرحله 3: نصب FreeIPA بدون DNS
+sudo ipa-server-install \
+  --domain=mci.local \
+  --realm=MCI.LOCAL \
+  --ds-password=MySecretPassword123 \
+  --admin-password=MySecretPassword123 \
+  --hostname=ipa.mci.local \
+  --ip-address=192.168.0.36 \
+  --no-dns-sshfp \
+  --unattended
+
+# مرحله 4: راه‌اندازی سرویس‌ها
+sudo systemctl enable ipa
+sudo systemctl start ipa
+sudo systemctl enable ipa-dnskeysyncd
+sudo systemctl start ipa-dnskeysyncd
+
+# مرحله 5: ایجاد کاربر MCI
+sudo ipa user-add mci --first=MCI --last=User --email=mci@mci.local
+sudo ipa group-add-member admins --users=mci
+
+# مرحله 6: تنظیم رمز عبور MCI
+sudo ipa user-mod mci --password
+
+# مرحله 7: بررسی وضعیت
+sudo systemctl status ipa

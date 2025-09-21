@@ -14,7 +14,8 @@ from config import config
 from sqlalchemy import or_, text
 from models import db, User, Server, Task, Content, Backup, CustomField, CustomFieldValue, SecurityProject, Notification, Credential, Bookmark, Attachment, ActivityLog, Person, LookupItem, FreeIPAServer, FreeIPAUser, FreeIPAGroup, FreeIPAUserGroup, UserPassword, SMSTemplate, SMSLog
 from app_custom_fields import custom_fields_bp
-from freeipa_service import FreeIPAManager
+from freeipa_service import freeipa_service
+from freeipa_routes import freeipa_bp
 from forms import (LoginForm, UserForm, EditUserForm, ChangePasswordForm, 
                   ServerForm, TaskForm, ContentForm, BackupForm,
                   CustomFieldForm, CustomFieldEditForm, SecurityProjectForm, SecurityProjectEditForm,
@@ -67,6 +68,7 @@ def create_app(config_name='default'):
     
     # Register custom fields blueprint
     app.register_blueprint(custom_fields_bp)
+    app.register_blueprint(freeipa_bp)
     
     # Test route to check template changes
     @app.route('/test-template')
@@ -1986,6 +1988,60 @@ def create_app(config_name='default'):
                 flash(f'خطا در ایجاد گروه: {str(e)}', 'error')
         
         return render_template('freeipa/add_group.html')
+    
+    @app.route('/freeipa/groups/edit/<int:group_id>', methods=['GET', 'POST'])
+    @login_required
+    def freeipa_edit_group(group_id):
+        """ویرایش گروه FreeIPA"""
+        group = FreeIPAGroup.query.get_or_404(group_id)
+        
+        if request.method == 'POST':
+            try:
+                group.cn = request.form['cn']
+                group.description = request.form.get('description')
+                group.is_active = 'is_active' in request.form
+                
+                db.session.commit()
+                flash('گروه با موفقیت ویرایش شد', 'success')
+                return redirect(url_for('freeipa_groups'))
+            except Exception as e:
+                flash(f'خطا در ویرایش گروه: {str(e)}', 'error')
+        
+        return render_template('freeipa/edit_group.html', group=group)
+    
+    @app.route('/freeipa/groups/delete/<int:group_id>', methods=['POST'])
+    @login_required
+    def freeipa_delete_group(group_id):
+        """حذف گروه FreeIPA"""
+        try:
+            freeipa_manager = FreeIPAManager(db.session)
+            success, message = freeipa_manager.delete_group(group_id)
+            
+            if success:
+                flash('گروه با موفقیت حذف شد', 'success')
+            else:
+                flash(f'خطا در حذف گروه: {message}', 'error')
+        except Exception as e:
+            flash(f'خطا در حذف گروه: {str(e)}', 'error')
+        
+        return redirect(url_for('freeipa_groups'))
+    
+    @app.route('/freeipa/users/delete/<int:user_id>', methods=['POST'])
+    @login_required
+    def freeipa_delete_user(user_id):
+        """حذف کاربر FreeIPA"""
+        try:
+            freeipa_manager = FreeIPAManager(db.session)
+            success, message = freeipa_manager.delete_user(user_id)
+            
+            if success:
+                flash('کاربر با موفقیت حذف شد', 'success')
+            else:
+                flash(f'خطا در حذف کاربر: {message}', 'error')
+        except Exception as e:
+            flash(f'خطا در حذف کاربر: {str(e)}', 'error')
+        
+        return redirect(url_for('freeipa_users'))
     
     @app.route('/freeipa/users/add-to-group/<int:user_id>', methods=['POST'])
     @login_required

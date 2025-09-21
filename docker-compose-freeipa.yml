@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  freeipa-server:
+    image: freeipa/freeipa-server:latest
+    container_name: freeipa-server
+    hostname: ipa.example.com
+    ports:
+      - "80:80"
+      - "443:443"
+      - "389:389"
+      - "636:636"
+    environment:
+      - IPA_SERVER_IP=127.0.0.1
+      - PASSWORD=MySecretPassword123
+      - DOMAIN=example.com
+      - REALM=EXAMPLE.COM
+      - HOSTNAME=ipa.example.com
+    volumes:
+      - freeipa-data:/data
+      - freeipa-logs:/var/logs
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+    privileged: true
+    restart: unless-stopped
+    command: |
+      bash -c "
+        ipa-server-install --unattended \
+          --domain=example.com \
+          --realm=EXAMPLE.COM \
+          --ds-password=MySecretPassword123 \
+          --admin-password=MySecretPassword123 \
+          --hostname=ipa.example.com \
+          --ip-address=127.0.0.1 \
+          --setup-dns \
+          --forwarder=8.8.8.8 \
+          --forwarder=8.8.4.4
+      "
+
+volumes:
+  freeipa-data:
+  freeipa-logs:
+
+
+
+

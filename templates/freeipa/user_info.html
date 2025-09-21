@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}اطلاعات کاربر - {{ user.username }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3>اطلاعات کاربر: {{ user.username }}</h3>
+                    <a href="{{ url_for('freeipa.list_users') }}" class="btn btn-secondary">بازگشت</a>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>اطلاعات شخصی</h5>
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>نام کاربری:</strong></td>
+                                    <td>{{ user.username }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>نام کامل:</strong></td>
+                                    <td>{{ user.full_name }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>نام:</strong></td>
+                                    <td>{{ user.first_name }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>نام خانوادگی:</strong></td>
+                                    <td>{{ user.last_name }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>ایمیل:</strong></td>
+                                    <td>{{ user.email }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>گروه‌ها</h5>
+                            {% if user.groups %}
+                                <div class="list-group">
+                                    {% for group in user.groups %}
+                                        <div class="list-group-item">
+                                            <span class="badge bg-primary">{{ group }}</span>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <p class="text-muted">هیچ گروهی یافت نشد</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

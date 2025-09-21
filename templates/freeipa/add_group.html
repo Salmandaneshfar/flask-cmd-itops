@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}افزودن گروه جدید - FreeIPA{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-users"></i>
+                        افزودن گروه جدید
+                    </h3>
+                    <div class="card-tools">
+                        <a href="{{ url_for('freeipa_groups') }}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-arrow-left"></i>
+                            بازگشت
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="cn">نام گروه <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="cn" name="cn" required>
+                                    <small class="form-text text-muted">نام گروه در FreeIPA</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="gid_number">GID Number</label>
+                                    <input type="text" class="form-control" id="gid_number" name="gid_number">
+                                    <small class="form-text text-muted">شماره GID گروه (اختیاری)</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="description">توضیحات</label>
+                            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+                                <label class="form-check-label" for="is_active">
+                                    گروه فعال است
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i>
+                                ایجاد گروه
+                            </button>
+                            <a href="{{ url_for('freeipa_groups') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i>
+                                انصراف
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+
+

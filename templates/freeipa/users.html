@@ -3,224 +3,52 @@
 {% block title %}کاربران FreeIPA{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="page-header">
-                <h1><i class="fas fa-users"></i> مدیریت کاربران FreeIPA</h1>
-                <p class="text-muted">ایجاد، ویرایش و مدیریت کاربران FreeIPA</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- دکمه‌های عملیات -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <a href="{{ url_for('freeipa_add_user') }}" class="btn btn-primary">
-                                <i class="fas fa-user-plus"></i> افزودن کاربر جدید
-                            </a>
-                            <a href="{{ url_for('freeipa_sync') }}" class="btn btn-info">
-                                <i class="fas fa-sync"></i> همگام‌سازی
-                            </a>
-                        </div>
-                        <div class="col-md-6 text-left">
-                            <form method="GET" class="form-inline">
-                                <div class="form-group">
-                                    <input type="text" name="search" class="form-control" placeholder="جستجو..." value="{{ request.args.get('search', '') }}">
-                                    <button type="submit" class="btn btn-outline-primary">
-                                        <i class="fas fa-search"></i>
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- جدول کاربران -->
+<div class="container mt-5">
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-list"></i> لیست کاربران</h5>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3>کاربران FreeIPA</h3>
+                    <a href="{{ url_for('freeipa.test_connection') }}" class="btn btn-info">تست اتصال</a>
                 </div>
                 <div class="card-body">
-                    {% if users.items %}
+                    {% if users %}
                         <div class="table-responsive">
-                            <table class="table table-hover">
+                            <table class="table table-striped">
                                 <thead>
                                     <tr>
                                         <th>نام کاربری</th>
                                         <th>نام کامل</th>
                                         <th>ایمیل</th>
-                                        <th>موبایل</th>
-                                        <th>وضعیت</th>
-                                        <th>تاریخ ایجاد</th>
+                                        <th>گروه‌ها</th>
                                         <th>عملیات</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for user in users.items %}
+                                    {% for user in users %}
                                     <tr>
+                                        <td>{{ user.username }}</td>
+                                        <td>{{ user.full_name }}</td>
+                                        <td>{{ user.email }}</td>
                                         <td>
-                                            <strong>{{ user.uid }}</strong>
-                                        </td>
-                                        <td>{{ user.cn }}</td>
-                                        <td>
-                                            <a href="mailto:{{ user.mail }}">{{ user.mail }}</a>
-                                        </td>
-                                        <td>
-                                            {% if user.mobile %}
-                                                <a href="tel:{{ user.mobile }}">{{ user.mobile }}</a>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
+                                            {% for group in user.groups %}
+                                                <span class="badge bg-secondary">{{ group }}</span>
+                                            {% endfor %}
                                         </td>
                                         <td>
-                                            {% if user.is_active %}
-                                                <span class="badge badge-success">فعال</span>
-                                            {% else %}
-                                                <span class="badge badge-danger">غیرفعال</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ user.created_at.strftime('%Y/%m/%d') }}</td>
-                                        <td>
-                                            <div class="btn-group" role="group">
-                                                <a href="{{ url_for('freeipa_edit_user', user_id=user.id) }}" 
-                                                   class="btn btn-sm btn-outline-primary" title="ویرایش">
-                                                    <i class="fas fa-edit"></i>
-                                                </a>
-                                                <a href="{{ url_for('freeipa_user_passwords', user_id=user.id) }}" 
-                                                   class="btn btn-sm btn-outline-info" title="پسوردها">
-                                                    <i class="fas fa-key"></i>
-                                                </a>
-                                                <button type="button" class="btn btn-sm btn-outline-warning" 
-                                                        data-toggle="modal" data-target="#changePasswordModal{{ user.id }}" title="تغییر پسورد">
-                                                    <i class="fas fa-lock"></i>
-                                                </button>
-                                                <button type="button" class="btn btn-sm btn-outline-success" 
-                                                        data-toggle="modal" data-target="#addToGroupModal{{ user.id }}" title="افزودن به گروه">
-                                                    <i class="fas fa-layer-group"></i>
-                                                </button>
-                                            </div>
+                                            <a href="{{ url_for('freeipa.user_info', username=user.username) }}" 
+                                               class="btn btn-sm btn-outline-primary">مشاهده</a>
                                         </td>
                                     </tr>
-
-                                    <!-- Modal تغییر پسورد -->
-                                    <div class="modal fade" id="changePasswordModal{{ user.id }}" tabindex="-1">
-                                        <div class="modal-dialog">
-                                            <div class="modal-content">
-                                                <div class="modal-header">
-                                                    <h5 class="modal-title">تغییر پسورد - {{ user.uid }}</h5>
-                                                    <button type="button" class="close" data-dismiss="modal">
-                                                        <span>&times;</span>
-                                                    </button>
-                                                </div>
-                                                <form method="POST" action="{{ url_for('freeipa_change_password', user_id=user.id) }}">
-                                                    <div class="modal-body">
-                                                        <div class="form-group">
-                                                            <label for="new_password{{ user.id }}">پسورد جدید (اختیاری)</label>
-                                                            <input type="password" class="form-control" id="new_password{{ user.id }}" 
-                                                                   name="new_password" placeholder="خالی بگذارید تا خودکار تولید شود">
-                                                        </div>
-                                                        <div class="form-check">
-                                                            <input type="checkbox" class="form-check-input" id="send_sms{{ user.id }}" 
-                                                                   name="send_sms" checked>
-                                                            <label class="form-check-label" for="send_sms{{ user.id }}">
-                                                                ارسال پیامک
-                                                            </label>
-                                                        </div>
-                                                    </div>
-                                                    <div class="modal-footer">
-                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">انصراف</button>
-                                                        <button type="submit" class="btn btn-warning">تغییر پسورد</button>
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Modal افزودن به گروه -->
-                                    <div class="modal fade" id="addToGroupModal{{ user.id }}" tabindex="-1">
-                                        <div class="modal-dialog">
-                                            <div class="modal-content">
-                                                <div class="modal-header">
-                                                    <h5 class="modal-title">افزودن به گروه - {{ user.uid }}</h5>
-                                                    <button type="button" class="close" data-dismiss="modal">
-                                                        <span>&times;</span>
-                                                    </button>
-                                                </div>
-                                                <form method="POST" action="{{ url_for('freeipa_add_user_to_group', user_id=user.id) }}">
-                                                    <div class="modal-body">
-                                                        <div class="form-group">
-                                                            <label for="group_cn{{ user.id }}">نام گروه</label>
-                                                            <input type="text" class="form-control" id="group_cn{{ user.id }}" 
-                                                                   name="group_cn" placeholder="نام گروه" required>
-                                                        </div>
-                                                    </div>
-                                                    <div class="modal-footer">
-                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">انصراف</button>
-                                                        <button type="submit" class="btn btn-success">افزودن به گروه</button>
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
                                     {% endfor %}
                                 </tbody>
                             </table>
                         </div>
-
-                        <!-- Pagination -->
-                        {% if users.pages > 1 %}
-                        <nav aria-label="صفحه‌بندی">
-                            <ul class="pagination justify-content-center">
-                                {% if users.has_prev %}
-                                    <li class="page-item">
-                                        <a class="page-link" href="{{ url_for('freeipa_users', page=users.prev_num) }}">قبلی</a>
-                                    </li>
-                                {% endif %}
-                                
-                                {% for page_num in users.iter_pages() %}
-                                    {% if page_num %}
-                                        {% if page_num != users.page %}
-                                            <li class="page-item">
-                                                <a class="page-link" href="{{ url_for('freeipa_users', page=page_num) }}">{{ page_num }}</a>
-                                            </li>
-                                        {% else %}
-                                            <li class="page-item active">
-                                                <span class="page-link">{{ page_num }}</span>
-                                            </li>
-                                        {% endif %}
-                                    {% else %}
-                                        <li class="page-item disabled">
-                                            <span class="page-link">...</span>
-                                        </li>
-                                    {% endif %}
-                                {% endfor %}
-                                
-                                {% if users.has_next %}
-                                    <li class="page-item">
-                                        <a class="page-link" href="{{ url_for('freeipa_users', page=users.next_num) }}">بعدی</a>
-                                    </li>
-                                {% endif %}
-                            </ul>
-                        </nav>
-                        {% endif %}
                     {% else %}
-                        <div class="text-center py-5">
-                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
-                            <h5 class="text-muted">هیچ کاربری یافت نشد</h5>
-                            <p class="text-muted">برای شروع، یک کاربر جدید اضافه کنید</p>
-                            <a href="{{ url_for('freeipa_add_user') }}" class="btn btn-primary">
-                                <i class="fas fa-user-plus"></i> افزودن کاربر جدید
-                            </a>
+                        <div class="alert alert-info">
+                            <h5>هیچ کاربری یافت نشد</h5>
+                            <p>ممکن است FreeIPA در حال راه‌اندازی باشد یا مشکلی در اتصال وجود داشته باشد.</p>
+                            <a href="{{ url_for('freeipa.test_connection') }}" class="btn btn-info">تست اتصال</a>
                         </div>
                     {% endif %}
                 </div>
@@ -228,56 +56,4 @@
         </div>
     </div>
 </div>
-
-<style>
-.card {
-    border: none;
-    border-radius: 15px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(20px);
-    background: rgba(255, 255, 255, 0.95);
-}
-
-.card-header {
-    background: rgba(255, 255, 255, 0.1);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-    border-radius: 15px 15px 0 0;
-}
-
-.table th {
-    border-top: none;
-    font-weight: 600;
-    color: #2d3748;
-    background: rgba(0, 0, 0, 0.02);
-}
-
-.btn-group .btn {
-    margin-left: 2px;
-}
-
-.modal-content {
-    border-radius: 15px;
-    border: none;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-}
-
-.pagination .page-link {
-    border-radius: 8px;
-    margin: 0 2px;
-    border: none;
-    color: #667eea;
-    background: rgba(255, 255, 255, 0.8);
-}
-
-.pagination .page-item.active .page-link {
-    background: #667eea;
-    color: white;
-}
-
-.pagination .page-link:hover {
-    background: #667eea;
-    color: white;
-    transform: translateY(-1px);
-}
-</style>
 {% endblock %}

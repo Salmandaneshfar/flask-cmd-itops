@@ -339,3 +339,77 @@ class FreeIPAClient:
                 return False, "Connection failed"
         except Exception as e:
             return False, str(e)
+    
+    def delete_group(self, cn: str) -> Tuple[bool, str]:
+        """حذف گروه"""
+        try:
+            if not self.connection:
+                if not self.connect():
+                    return False, "Failed to connect to FreeIPA"
+            
+            group_dn = f"cn={cn},cn=groups,cn=accounts,{self.base_dn}"
+            
+            success = self.connection.delete(group_dn)
+            
+            if success:
+                logger.info(f"Group {cn} deleted successfully")
+                return True, "Group deleted successfully"
+            else:
+                return False, self.connection.last_error
+            
+        except LDAPException as e:
+            logger.error(f"Failed to delete group {cn}: {e}")
+            return False, str(e)
+    
+    def delete_user(self, uid: str) -> Tuple[bool, str]:
+        """حذف کاربر"""
+        try:
+            if not self.connection:
+                if not self.connect():
+                    return False, "Failed to connect to FreeIPA"
+            
+            user_dn = f"uid={uid},cn=users,cn=accounts,{self.base_dn}"
+            
+            success = self.connection.delete(user_dn)
+            
+            if success:
+                logger.info(f"User {uid} deleted successfully")
+                return True, "User deleted successfully"
+            else:
+                return False, self.connection.last_error
+            
+        except LDAPException as e:
+            logger.error(f"Failed to delete user {uid}: {e}")
+            return False, str(e)
+    
+    def get_group_members(self, group_cn: str) -> Tuple[bool, List[str], str]:
+        """دریافت اعضای گروه"""
+        try:
+            if not self.connection:
+                if not self.connect():
+                    return False, [], "Failed to connect to FreeIPA"
+            
+            group_dn = f"cn={group_cn},cn=groups,cn=accounts,{self.base_dn}"
+            
+            success = self.connection.search(
+                group_dn,
+                '(objectClass=groupOfNames)',
+                attributes=['member']
+            )
+            
+            if success and self.connection.entries:
+                members = []
+                for entry in self.connection.entries:
+                    if hasattr(entry, 'member'):
+                        for member in entry.member.values:
+                            # استخراج uid از DN
+                            if 'uid=' in member:
+                                uid = member.split('uid=')[1].split(',')[0]
+                                members.append(uid)
+                return True, members, "Group members retrieved successfully"
+            else:
+                return False, [], "No members found or group doesn't exist"
+            
+        except LDAPException as e:
+            logger.error(f"Failed to get group members for {group_cn}: {e}")
+            return False, [], str(e)

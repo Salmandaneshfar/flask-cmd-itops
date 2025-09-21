@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}مدیریت گروه‌ها - FreeIPA{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-users"></i>
+                        مدیریت گروه‌های FreeIPA
+                    </h3>
+                    <div class="card-tools">
+                        <a href="{{ url_for('freeipa_add_group') }}" class="btn btn-primary btn-sm">
+                            <i class="fas fa-plus"></i>
+                            افزودن گروه جدید
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if groups %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>نام گروه</th>
+                                    <th>GID Number</th>
+                                    <th>توضیحات</th>
+                                    <th>وضعیت</th>
+                                    <th>تاریخ ایجاد</th>
+                                    <th>عملیات</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for group in groups %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ group.cn }}</strong>
+                                    </td>
+                                    <td>{{ group.gid_number or '-' }}</td>
+                                    <td>{{ group.description or '-' }}</td>
+                                    <td>
+                                        {% if group.is_active %}
+                                            <span class="badge badge-success">فعال</span>
+                                        {% else %}
+                                            <span class="badge badge-danger">غیرفعال</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ group.created_at.strftime('%Y/%m/%d %H:%M') }}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('freeipa_edit_group', group_id=group.id) }}" 
+                                               class="btn btn-info btn-sm" title="ویرایش">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-danger btn-sm" 
+                                                    onclick="deleteGroup({{ group.id }}, '{{ group.cn }}')" 
+                                                    title="حذف">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle"></i>
+                        هیچ گروهی یافت نشد. 
+                        <a href="{{ url_for('freeipa_add_group') }}">اولین گروه را ایجاد کنید</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function deleteGroup(groupId, groupName) {
+    if (confirm('آیا از حذف گروه "' + groupName + '" اطمینان دارید؟\nاین عمل قابل بازگشت نیست.')) {
+        // ایجاد فرم برای ارسال درخواست POST
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("freeipa_delete_group", group_id=0) }}'.replace('0', groupId);
+        
+        // اضافه کردن CSRF token
+        const csrfToken = document.createElement('input');
+        csrfToken.type = 'hidden';
+        csrfToken.name = 'csrf_token';
+        csrfToken.value = '{{ csrf_token() }}';
+        form.appendChild(csrfToken);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

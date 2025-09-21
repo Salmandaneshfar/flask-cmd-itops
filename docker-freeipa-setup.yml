@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  freeipa:
+    image: freeipa/freeipa-server:rocky-9
+    container_name: freeipa-server
+    hostname: ipa.example.local
+    domainname: example.local
+    ports:
+      - "80:80"
+      - "443:443"
+      - "389:389"
+      - "636:636"
+      - "88:88"
+      - "464:464"
+    environment:
+      - IPA_SERVER_HOSTNAME=ipa.example.local
+      - IPA_SERVER_IP=127.0.0.1
+      - IPA_SERVER_DOMAIN=example.local
+      - IPA_SERVER_REALM=EXAMPLE.LOCAL
+      - IPA_ADMIN_PASSWORD=MySecretPassword123
+      - IPA_DS_PASSWORD=MySecretPassword123
+      - IPA_UNATTENDED=1
+    volumes:
+      - freeipa-data:/data
+      - freeipa-logs:/var/logs
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+    privileged: true
+    restart: unless-stopped
+
+volumes:
+  freeipa-data:
+  freeipa-logs:

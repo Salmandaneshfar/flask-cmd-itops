@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  freeipa-local:
+    image: freeipa/freeipa-server:rocky-9
+    container_name: freeipa-local
+    hostname: ipa.local.local
+    domainname: local.local
+    ports:
+      - "1389:389"   # LDAP
+      - "1636:636"   # LDAPS
+      - "180:80"     # HTTP
+      - "1443:443"   # HTTPS
+      - "188:88"     # Kerberos
+      - "1464:464"   # Kerberos password
+    environment:
+      - IPA_SERVER_HOSTNAME=ipa.local.local
+      - IPA_SERVER_IP=127.0.0.1
+      - IPA_SERVER_DOMAIN=local.local
+      - IPA_SERVER_REALM=LOCAL.LOCAL
+      - IPA_ADMIN_PASSWORD=MySecretPassword123
+      - IPA_DS_PASSWORD=MySecretPassword123
+      - IPA_UNATTENDED=1
+    volumes:
+      - freeipa-data:/data
+      - freeipa-logs:/var/logs
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+    privileged: true
+    restart: unless-stopped
+    command: ["/usr/sbin/init"]
+
+volumes:
+  freeipa-data:
+  freeipa-logs:

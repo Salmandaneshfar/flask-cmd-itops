@@ -57,6 +57,14 @@ class Config:
 
     # تنظیمات Rate Limiter: در dev حافظه‌ای، در prod قابل override با REDIS
     RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'memory://')
+    
+    # تنظیمات FreeIPA
+    FREEIPA_HOST = os.environ.get('FREEIPA_HOST', '192.168.0.36')
+    FREEIPA_PORT = int(os.environ.get('FREEIPA_PORT', 389))
+    FREEIPA_USE_SSL = os.environ.get('FREEIPA_USE_SSL', 'false').lower() in ['true', 'on', '1']
+    FREEIPA_BASE_DN = os.environ.get('FREEIPA_BASE_DN', 'dc=mci,dc=local')
+    FREEIPA_BIND_DN = os.environ.get('FREEIPA_BIND_DN', 'cn=mci,cn=users,dc=mci,dc=local')
+    FREEIPA_BIND_PASSWORD = os.environ.get('FREEIPA_BIND_PASSWORD', '')
 
 class DevelopmentConfig(Config):
     DEBUG = True
