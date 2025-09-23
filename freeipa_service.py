@@ -138,7 +138,7 @@ class FreeIPAService:
             else:
                 conn.unbind()
                 return []
-                
+            
         except Exception as e:
             logger.error(f"خطا در دریافت لیست کاربران: {e}")
             return []
@@ -155,18 +155,147 @@ class FreeIPAService:
         groups = self.get_user_groups(username)
         return any(group_name in group for group in groups)
     
+    def add_user_to_group(self, username: str, group_cn: str) -> bool:
+        """افزودن کاربر به یک گروه"""
+        try:
+            from ldap3 import MODIFY_ADD
+            config = self._get_config()
+            user_dn = f"uid={username},cn=users,cn=accounts,{config['base_dn']}"
+            group_dn = f"cn={group_cn},cn=groups,cn=accounts,{config['base_dn']}"
+            conn = self._get_connection()
+            if not conn or not conn.bind():
+                return False
+            ok = conn.modify(group_dn, {'member': [(MODIFY_ADD, [user_dn])]} )
+            conn.unbind()
+            return ok
+        except Exception as e:
+            logger.error(f"خطا در افزودن کاربر به گروه: {e}")
+            return False
+    
+    def remove_user_from_group(self, username: str, group_cn: str) -> bool:
+        """حذف کاربر از گروه"""
+        try:
+            from ldap3 import MODIFY_DELETE
+            config = self._get_config()
+            user_dn = f"uid={username},cn=users,cn=accounts,{config['base_dn']}"
+            group_dn = f"cn={group_cn},cn=groups,cn=accounts,{config['base_dn']}"
+            conn = self._get_connection()
+            if not conn or not conn.bind():
+                return False
+            ok = conn.modify(group_dn, {'member': [(MODIFY_DELETE, [user_dn])]} )
+            conn.unbind()
+            return ok
+        except Exception as e:
+            logger.error(f"خطا در حذف کاربر از گروه: {e}")
+            return False
+
+    def set_user_password(self, username: str, new_password: str, old_password: str | None = None) -> bool:
+        """تعیین/ریست پسورد کاربر با Password Modify Extended Operation تا اجبار تغییر رفع شود."""
+        try:
+            config = self._get_config()
+            user_dn = f"uid={username},cn=users,cn=accounts,{config['base_dn']}"
+            conn = self._get_connection()
+            if not conn or not conn.bind():
+                return False
+            # Use LDAP Password Modify Extended Operation
+            ok = conn.extend.standard.modify_password(user=user_dn, new_password=new_password, old_password=old_password)
+            # Optionally relax policy to be safe
+            if ok:
+                try:
+                    from ldap3 import MODIFY_REPLACE, MODIFY_DELETE
+                    conn.modify(user_dn, {
+                        'krbPasswordExpiration': [(MODIFY_REPLACE, ['20380119031407Z'])],
+                        'nsAccountLock': [(MODIFY_REPLACE, ['FALSE'])]
+                    })
+                    # best-effort clear failures
+                    try:
+                        conn.modify(user_dn, {'krbLoginFailedCount': [(MODIFY_DELETE, [])]})
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+            conn.unbind()
+            return ok
+        except Exception as e:
+            logger.error(f"خطا در تنظیم پسورد کاربر (extended op): {e}")
+            return False
+
+    def relax_password_policy(self, username: str) -> bool:
+        """برداشتن اجبار تغییر رمز و تمدید تاریخ انقضای پسورد، پاک‌کردن لاک/شکست‌ها"""
+        try:
+            from ldap3 import MODIFY_REPLACE, MODIFY_DELETE
+            config = self._get_config()
+            user_dn = f"uid={username},cn=users,cn=accounts,{config['base_dn']}"
+            conn = self._get_connection()
+            if not conn or not conn.bind():
+                return False
+            # تاریخ انقضای خیلی دور (2038-01-19 03:14:07Z)
+            changes = {
+                'krbPasswordExpiration': [(MODIFY_REPLACE, ['20380119031407Z'])],
+                'nsAccountLock': [(MODIFY_REPLACE, ['FALSE'])]
+            }
+            ok = conn.modify(user_dn, changes)
+            # پاک کردن شمارنده شکست‌ها (اگر وجود دارد)
+            try:
+                conn.modify(user_dn, {'krbLoginFailedCount': [(MODIFY_DELETE, [])]})
+            except Exception:
+                pass
+            conn.unbind()
+            return ok
+        except Exception as e:
+            logger.error(f"خطا در Relax policy کاربر: {e}")
+            return False
+
+    def set_principal_expiration(self, username: str, zulu_timestamp: str) -> bool:
+        """تنظیم تاریخ انقضای Kerberos principal کاربر: فرمت Zulu مانند 20371231235959Z"""
+        try:
+            from ldap3 import MODIFY_REPLACE
+            config = self._get_config()
+            user_dn = f"uid={username},cn=users,cn=accounts,{config['base_dn']}"
+            conn = self._get_connection()
+            if not conn or not conn.bind():
+                return False
+            ok = conn.modify(user_dn, {'krbPrincipalExpiration': [(MODIFY_REPLACE, [zulu_timestamp])]})
+            conn.unbind()
+            return ok
+        except Exception as e:
+            logger.error(f"خطا در تنظیم krbPrincipalExpiration: {e}")
+            return False
+
+    def unset_principal_expiration(self, username: str) -> bool:
+        """حذف تاریخ انقضای Kerberos principal (بازگردانی به بدون انقضا)"""
+        try:
+            from ldap3 import MODIFY_DELETE
+            config = self._get_config()
+            user_dn = f"uid={username},cn=users,cn=accounts,{config['base_dn']}"
+            conn = self._get_connection()
+            if not conn or not conn.bind():
+                return False
+            ok = conn.modify(user_dn, {'krbPrincipalExpiration': [(MODIFY_DELETE, [])]})
+            conn.unbind()
+            return ok
+        except Exception as e:
+            logger.error(f"خطا در حذف krbPrincipalExpiration: {e}")
+            return False
+    
     def get_all_groups(self):
         """دریافت همه گروه‌های FreeIPA"""
         try:
             conn = self._get_connection()
             if not conn:
                 return []
+
             if conn.bind():
                 config = self._get_config()
                 base_groups = f"cn=groups,cn=accounts,{config['base_dn']}"
                 search_filter = "(objectClass=groupOfNames)"
-                conn.search(base_groups, search_filter, SUBTREE,
-                           attributes=['cn', 'description', 'gidNumber', 'member'])
+                conn.search(
+                    base_groups,
+                    search_filter,
+                    SUBTREE,
+                    attributes=['cn', 'description', 'gidNumber', 'member']
+                )
+
                 groups = []
                 for entry in conn.entries:
                     groups.append({
@@ -175,6 +304,7 @@ class FreeIPAService:
                         'gid_number': str(getattr(entry, 'gidNumber', '')) if hasattr(entry, 'gidNumber') else '',
                         'members': list(entry.member) if hasattr(entry, 'member') else []
                     })
+
                 conn.unbind()
                 return groups
             else:

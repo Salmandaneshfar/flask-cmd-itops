@@ -3,6 +3,7 @@ Route های FreeIPA برای Flask CMS
 """
 
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
+from datetime import datetime, timedelta
 from freeipa_service import freeipa_service
 import logging
 
@@ -53,6 +54,111 @@ def user_info(username):
     except Exception as e:
         flash(f'خطا در دریافت اطلاعات کاربر: {e}', 'error')
         return redirect(url_for('freeipa.list_users'))
+
+@freeipa_bp.route('/user/<username>/group/add', methods=['POST'])
+def add_user_to_group_action(username):
+    try:
+        group_cn = request.form.get('group_cn')
+        if not group_cn:
+            flash('نام گروه وارد نشده است', 'error')
+            return redirect(url_for('freeipa.user_info', username=username))
+        ok = freeipa_service.add_user_to_group(username, group_cn)
+        flash('کاربر به گروه افزوده شد' if ok else 'خطا در افزودن به گروه', 'success' if ok else 'error')
+    except Exception as e:
+        flash(f'خطا: {e}', 'error')
+    return redirect(url_for('freeipa.user_info', username=username))
+
+@freeipa_bp.route('/user/<username>/group/remove', methods=['POST'])
+def remove_user_from_group_action(username):
+    try:
+        group_cn = request.form.get('group_cn')
+        if not group_cn:
+            flash('نام گروه وارد نشده است', 'error')
+            return redirect(url_for('freeipa.user_info', username=username))
+        ok = freeipa_service.remove_user_from_group(username, group_cn)
+        flash('کاربر از گروه حذف شد' if ok else 'خطا در حذف از گروه', 'success' if ok else 'error')
+    except Exception as e:
+        flash(f'خطا: {e}', 'error')
+    return redirect(url_for('freeipa.user_info', username=username))
+
+@freeipa_bp.route('/user/<username>/password/reset', methods=['POST'])
+def reset_user_password_action(username):
+    try:
+        import secrets, string
+        new_password = request.form.get('new_password', '').strip()
+        if not new_password:
+            alphabet = string.ascii_letters + string.digits + '!@#$%^&*()'
+            new_password = ''.join(secrets.choice(alphabet) for _ in range(12))
+        ok = freeipa_service.set_user_password(username, new_password)
+        if ok:
+            from models import db, FreeIPAUser, UserPassword
+            freeipa_user = FreeIPAUser.query.filter_by(uid=username).first()
+            if not freeipa_user:
+                freeipa_user = FreeIPAUser(uid=username, cn=username, sn=username, givenname=username, mail='')
+                db.session.add(freeipa_user)
+                db.session.flush()
+            up = UserPassword(user_id=freeipa_user.id, password_type='reset', created_by=1)
+            up.set_password_raw(new_password)
+            db.session.add(up)
+            db.session.commit()
+            flash('پسورد ریست شد و برای ارسال/مرجع ذخیره شد', 'success')
+        else:
+            flash('خطا در ریست پسورد', 'error')
+    except Exception as e:
+        from models import db
+        db.session.rollback()
+        flash(f'خطا: {e}', 'error')
+    return redirect(url_for('freeipa.user_info', username=username))
+
+@freeipa_bp.route('/user/<username>/password/relax', methods=['POST'])
+def relax_user_password_policy_action(username):
+    try:
+        ok = freeipa_service.relax_password_policy(username)
+        flash('سیاست رمز برای کاربر به‌روزرسانی شد' if ok else 'خطا در به‌روزرسانی سیاست رمز', 'success' if ok else 'error')
+    except Exception as e:
+        flash(f'خطا: {e}', 'error')
+    return redirect(url_for('freeipa.user_info', username=username))
+
+@freeipa_bp.route('/user/<username>/principal-exp', methods=['POST'])
+def set_principal_expiration_action(username):
+    try:
+        zulu = request.form.get('krb_principal_exp')
+        clear = request.form.get('clear_exp')
+        rel_days = request.form.get('relative_days')
+        rel_hours = request.form.get('relative_hours')
+        if clear == '1' or (zulu and zulu.strip() == ''):
+            ok = freeipa_service.unset_principal_expiration(username)
+        elif rel_days or rel_hours:
+            now = datetime.utcnow()
+            delta = timedelta(days=int(rel_days or 0), hours=int(rel_hours or 0))
+            target = now + delta
+            zulu_calc = target.strftime('%Y%m%d%H%M%SZ')
+            ok = freeipa_service.set_principal_expiration(username, zulu_calc)
+        else:
+            ok = freeipa_service.set_principal_expiration(username, zulu.strip())
+        flash('Kerberos principal expiration به‌روزرسانی شد' if ok else 'خطا در به‌روزرسانی expiration', 'success' if ok else 'error')
+    except Exception as e:
+        flash(f'خطا: {e}', 'error')
+    return redirect(url_for('freeipa.user_info', username=username))
+
+@freeipa_bp.route('/user/<username>/delete', methods=['POST'])
+def delete_user_action(username):
+    """حذف کاربر از FreeIPA"""
+    try:
+        # حذف از LDAP
+        cfg = freeipa_service._get_config()
+        from ldap3 import SUBTREE
+        conn = freeipa_service._get_connection()
+        if not conn or not conn.bind():
+            flash('اتصال به FreeIPA برقرار نشد', 'error')
+            return redirect(url_for('freeipa.list_users'))
+        user_dn = f"uid={username},cn=users,cn=accounts,{cfg['base_dn']}"
+        ok = conn.delete(user_dn)
+        conn.unbind()
+        flash('کاربر حذف شد' if ok else 'حذف کاربر ناموفق بود', 'success' if ok else 'error')
+    except Exception as e:
+        flash(f'خطا: {e}', 'error')
+    return redirect(url_for('freeipa.list_users'))
 
 @freeipa_bp.route('/groups')
 def groups():

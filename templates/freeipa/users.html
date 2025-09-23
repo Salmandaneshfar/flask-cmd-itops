@@ -3,7 +3,14 @@
 {% block title %}کاربران FreeIPA{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
+<div class="container-fluid mt-3">
+    <style>
+      .users-table thead th { position: sticky; top: 0; background: #fff; z-index: 2; }
+      .users-table td, .users-table th { padding: .45rem .6rem; font-size: .88rem; white-space: nowrap; }
+      .users-table .badge { font-size: .72rem; }
+      .users-table .actions .btn { padding: .15rem .45rem; font-size: .78rem; }
+      @media (max-width: 992px) { .users-table td:nth-child(3) { display:none; } }
+    </style>
     <div class="row">
         <div class="col-12">
             <div class="card">
@@ -38,6 +45,10 @@
                                         <td>
                                             <a href="{{ url_for('freeipa.user_info', username=user.username) }}" 
                                                class="btn btn-sm btn-outline-primary">مشاهده</a>
+                                            <form method="post" action="{{ url_for('freeipa.delete_user_action', username=user.username) }}" style="display:inline-block" onsubmit="return confirm('حذف {{ user.username }}?')">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button class="btn btn-sm btn-outline-danger">حذف</button>
+                                            </form>
                                         </td>
                                     </tr>
                                     {% endfor %}
