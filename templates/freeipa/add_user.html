@@ -21,6 +21,7 @@
                 </div>
                 <div class="card-body">
                     <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-group">
@@ -66,6 +67,14 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-group">
+                                    <label for="password">پسورد (در صورت خالی، خودکار تولید می‌شود)</label>
+                                    <input type="text" class="form-control" id="password" name="password"
+                                           placeholder="مثال: P@ssw0rd!23" value="{{ request.form.get('password', '') }}">
+                                    <small class="form-text text-muted">این پسورد در اپ برای ارسال پیامک ذخیره می‌شود.</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
                                     <label for="mobile">شماره موبایل</label>
                                     <input type="tel" class="form-control" id="mobile" name="mobile"
                                            placeholder="09123456789" value="{{ request.form.get('mobile', '') }}">
@@ -79,9 +88,9 @@
                                         <div class="form-check-group">
                                             {% for group in groups %}
                                             <div class="form-check">
-                                                <input type="checkbox" class="form-check-input" id="group{{ group.id }}" 
+                                                <input type="checkbox" class="form-check-input" id="group{{ loop.index }}" 
                                                        name="groups" value="{{ group.cn }}">
-                                                <label class="form-check-label" for="group{{ group.id }}">
+                                                <label class="form-check-label" for="group{{ loop.index }}">
                                                     {{ group.cn }}
                                                     {% if group.description %}
                                                         <small class="text-muted">({{ group.description }})</small>
@@ -92,7 +101,7 @@
                                         </div>
                                     {% else %}
                                         <p class="text-muted">هیچ گروهی یافت نشد</p>
-                                        <a href="{{ url_for('freeipa_add_group') }}" class="btn btn-sm btn-outline-success">
+                                        <a href="{{ url_for('freeipa.add_group') }}" class="btn btn-sm btn-outline-success">
                                             <i class="fas fa-plus"></i> افزودن گروه
                                         </a>
                                     {% endif %}
@@ -120,7 +129,7 @@
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-save"></i> ایجاد کاربر
                             </button>
-                            <a href="{{ url_for('freeipa_users') }}" class="btn btn-secondary">
+                            <a href="{{ url_for('freeipa.list_users') }}" class="btn btn-secondary">
                                 <i class="fas fa-times"></i> انصراف
                             </a>
                         </div>

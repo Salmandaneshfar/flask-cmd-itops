@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}FreeIPA{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <!-- تب‌های سمت چپ -->
+    <div class="col-md-3">
+      <div class="list-group">
+        <a href="{{ url_for('freeipa.login') }}" class="list-group-item list-group-item-action">
+          <i class="fas fa-right-to-bracket"></i> ورود
+        </a>
+        <a href="{{ url_for('freeipa.api_test_connection') }}" class="list-group-item list-group-item-action">
+          <i class="fas fa-plug"></i> تست اتصال
+        </a>
+        <a href="{{ url_for('freeipa.list_users') }}" class="list-group-item list-group-item-action">
+          <i class="fas fa-users"></i> کاربران
+        </a>
+        <a href="{{ url_for('freeipa.add_user') }}" class="list-group-item list-group-item-action">
+          <i class="fas fa-user-plus"></i> افزودن کاربر
+        </a>
+        <a href="{{ url_for('freeipa.groups') }}" class="list-group-item list-group-item-action">
+          <i class="fas fa-layer-group"></i> گروه‌ها
+        </a>
+        <a href="{{ url_for('freeipa.add_group') }}" class="list-group-item list-group-item-action">
+          <i class="fas fa-plus-square"></i> افزودن گروه
+        </a>
+        <a href="{{ url_for('freeipa.servers') }}" class="list-group-item list-group-item-action">
+          <i class="fas fa-server"></i> سرورها/تنظیمات
+        </a>
+      </div>
+    </div>
+
+    <!-- محتوای سمت راست: توضیحات/میانبرها -->
+    <div class="col-md-9">
+      <div class="card">
+        <div class="card-header">
+          <h5><i class="fas fa-user-shield"></i> FreeIPA</h5>
+        </div>
+        <div class="card-body">
+          <p class="text-muted">از منوی سمت چپ یک بخش را انتخاب کنید.</p>
+          <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-primary" href="{{ url_for('freeipa.login') }}"><i class="fas fa-right-to-bracket"></i> ورود</a>
+            <a class="btn btn-success" href="{{ url_for('freeipa.list_users') }}"><i class="fas fa-users"></i> کاربران</a>
+            <a class="btn btn-outline-primary" href="{{ url_for('freeipa.add_user') }}"><i class="fas fa-user-plus"></i> افزودن کاربر</a>
+            <a class="btn btn-outline-success" href="{{ url_for('freeipa.groups') }}"><i class="fas fa-layer-group"></i> گروه‌ها</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+

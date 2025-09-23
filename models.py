@@ -412,6 +412,10 @@ class UserPassword(db.Model):
         from werkzeug.security import generate_password_hash
         self.password = generate_password_hash(password)
     
+    def set_password_raw(self, password):
+        """ذخیره متن‌واضح (برای ارسال SMS بعدی) - هشدار: فقط موقت استفاده شود"""
+        self.password = password
+
     def check_password(self, password):
         """بررسی پسورد"""
         from werkzeug.security import check_password_hash

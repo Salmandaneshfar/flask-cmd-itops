@@ -69,6 +69,11 @@ def create_app(config_name='default'):
     # Register custom fields blueprint
     app.register_blueprint(custom_fields_bp)
     app.register_blueprint(freeipa_bp)
+    # Exempt FreeIPA blueprint from CSRF to allow simple HTML forms without Flask-WTF
+    try:
+        csrf.exempt(freeipa_bp)
+    except Exception:
+        pass
     
     # Test route to check template changes
     @app.route('/test-template')

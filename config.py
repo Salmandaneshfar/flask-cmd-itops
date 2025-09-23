@@ -2,8 +2,9 @@ import os
 from datetime import timedelta
 from dotenv import load_dotenv
 
-# بارگذاری متغیرهای محیطی از فایل .env
+# بارگذاری متغیرهای محیطی از فایل .env و سپس freeipa_config.env (در صورت وجود)
 load_dotenv()
+load_dotenv(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'freeipa_config.env'), override=False)
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DEFAULT_SQLITE_PATH = os.path.join(BASE_DIR, 'instance', 'cms.db')
@@ -59,11 +60,11 @@ class Config:
     RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'memory://')
     
     # تنظیمات FreeIPA
-    FREEIPA_HOST = os.environ.get('FREEIPA_HOST', '192.168.0.36')
+    FREEIPA_HOST = os.environ.get('FREEIPA_HOST', '192.168.0.34')
     FREEIPA_PORT = int(os.environ.get('FREEIPA_PORT', 389))
     FREEIPA_USE_SSL = os.environ.get('FREEIPA_USE_SSL', 'false').lower() in ['true', 'on', '1']
     FREEIPA_BASE_DN = os.environ.get('FREEIPA_BASE_DN', 'dc=mci,dc=local')
-    FREEIPA_BIND_DN = os.environ.get('FREEIPA_BIND_DN', 'cn=mci,cn=users,dc=mci,dc=local')
+    FREEIPA_BIND_DN = os.environ.get('FREEIPA_BIND_DN', 'uid=admin,cn=users,cn=accounts,dc=mci,dc=local')
     FREEIPA_BIND_PASSWORD = os.environ.get('FREEIPA_BIND_PASSWORD', '')
 
 class DevelopmentConfig(Config):

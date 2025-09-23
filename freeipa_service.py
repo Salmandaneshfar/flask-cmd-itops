@@ -13,12 +13,12 @@ class FreeIPAService:
     """سرویس FreeIPA برای احراز هویت و مدیریت کاربران"""
     
     def __init__(self):
-        self.host = '192.168.0.36'
+        self.host = '192.168.0.34'
         self.port = 389
         self.use_ssl = False
         self.base_dn = 'dc=mci,dc=local'
-        self.bind_dn = 'cn=mci,cn=users,dc=mci,dc=local'
-        self.bind_password = 'MySecretPassword123'
+        self.bind_dn = 'uid=admin,cn=users,cn=accounts,dc=mci,dc=local'
+        self.bind_password = 'MyIPAAdminPass123!'
     
     def _get_config(self):
         """دریافت تنظیمات از Flask app"""
@@ -56,8 +56,8 @@ class FreeIPAService:
         """احراز هویت کاربر"""
         try:
             config = self._get_config()
-            # اتصال برای bind
-            bind_dn = f"uid={username},cn=users,{config['base_dn']}"
+            # اتصال برای bind (مسیر صحیح FreeIPA)
+            bind_dn = f"uid={username},cn=users,cn=accounts,{config['base_dn']}"
             server = Server(config['host'], port=config['port'], use_ssl=config['use_ssl'])
             conn = Connection(server, user=bind_dn, password=password)
             
@@ -154,6 +154,35 @@ class FreeIPAService:
         """بررسی عضویت کاربر در گروه"""
         groups = self.get_user_groups(username)
         return any(group_name in group for group in groups)
+    
+    def get_all_groups(self):
+        """دریافت همه گروه‌های FreeIPA"""
+        try:
+            conn = self._get_connection()
+            if not conn:
+                return []
+            if conn.bind():
+                config = self._get_config()
+                base_groups = f"cn=groups,cn=accounts,{config['base_dn']}"
+                search_filter = "(objectClass=groupOfNames)"
+                conn.search(base_groups, search_filter, SUBTREE,
+                           attributes=['cn', 'description', 'gidNumber', 'member'])
+                groups = []
+                for entry in conn.entries:
+                    groups.append({
+                        'cn': str(getattr(entry, 'cn', '')),
+                        'description': str(getattr(entry, 'description', '')) if hasattr(entry, 'description') else '',
+                        'gid_number': str(getattr(entry, 'gidNumber', '')) if hasattr(entry, 'gidNumber') else '',
+                        'members': list(entry.member) if hasattr(entry, 'member') else []
+                    })
+                conn.unbind()
+                return groups
+            else:
+                conn.unbind()
+                return []
+        except Exception as e:
+            logger.error(f"خطا در دریافت گروه‌ها: {e}")
+            return []
     
     def test_connection(self):
         """تست اتصال به FreeIPA"""

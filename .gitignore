@@ -1,37 +1,33 @@
-﻿# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-venv/
-
-# Flask instance DB
-instance/*.db
-instance/*.sqlite*
-
-# Logs & backups
-logs/
-backups/
-
-# Env & secrets
+﻿# Environment and secrets
+freeipa_config.env
+freeipa_config_local.env
 .env
 production.env
-.env.*
+production.env.bak
 
-# SSL
-ssl/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+instance/*.db
+instance/*.sqlite
 
-# IDE/OS
-.vscode/
-.idea/
-*.swp
+# Node/build
+node_modules/
+*.log
+
+# Virtualenv
+venv/
+ENV/
+.env*/
+
+# OS
 .DS_Store
 Thumbs.db
 
-# Adminator build cache
-adminator/node_modules/
-adminator/dist/
-adminator/.cache/
-
-# Uploads
-static/uploads/
+# IDE
+.vscode/
+.idea/
+*.code-workspace

@@ -15,7 +15,15 @@
               <select name="group" id="group" class="form-select" required>
                 <option value="department">واحد/اداره</option>
                 <option value="office">سازمان/اداره</option>
-                <option value="vendor">سازنده/فروشنده</option>
+                Failed to enable unit: Unit file pki-tomcatd@pki-tomcat.service does not exist.
+[root@localhost ~]# systemctl enable --now pki-tomcatd@pki-tomcat
+emctl enable --now httpd
+systemctl restart httpd pFailed to enable unit: Unit file pki-tomcatd@pki-tomcat.service does not exist.
+[root@localhost ~]# systemctl enable --now httpd
+ki-tomcaFailed to enable unit: Unit file httpd.service does not exist.
+[root@localhost ~]# systemctl restart httpd pki-tomcatd@pki-tomcat
+Failed to restart httpd.service: Unit httpd.service not found.
+Failed to restart pki-tomcatd@pki-tomcat.service: Unit pki-tomcatd@pki-tomcat.service not found.
               </select>
             </div>
             
