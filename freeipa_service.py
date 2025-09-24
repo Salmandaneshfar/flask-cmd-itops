@@ -283,8 +283,8 @@ class FreeIPAService:
         try:
             conn = self._get_connection()
             if not conn:
-                return []
-
+            return []
+    
             if conn.bind():
                 config = self._get_config()
                 base_groups = f"cn=groups,cn=accounts,{config['base_dn']}"
@@ -309,7 +309,7 @@ class FreeIPAService:
                 return groups
             else:
                 conn.unbind()
-                return []
+            return []
         except Exception as e:
             logger.error(f"خطا در دریافت گروه‌ها: {e}")
             return []
