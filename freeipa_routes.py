@@ -318,6 +318,9 @@ def servers():
             'base_dn': current_app.config.get('FREEIPA_BASE_DN', ''),
             'bind_dn': current_app.config.get('FREEIPA_BIND_DN', ''),
             'bind_password': current_app.config.get('FREEIPA_BIND_PASSWORD', ''),
+            'default_exp_days': current_app.config.get('FREEIPA_DEFAULT_PRINCIPAL_EXP_DAYS', 3),
+            'default_exp_hours': current_app.config.get('FREEIPA_DEFAULT_PRINCIPAL_EXP_HOURS', 0),
+            'unset_on_reset': current_app.config.get('FREEIPA_UNSET_PRINCIPAL_EXP_ON_RESET', False),
         }
         if request.method == 'POST':
             action = request.form.get('action', 'save')
@@ -328,12 +331,19 @@ def servers():
                 'FREEIPA_BASE_DN': request.form.get('base_dn', cfg['base_dn']).strip(),
                 'FREEIPA_BIND_DN': request.form.get('bind_dn', cfg['bind_dn']).strip(),
                 'FREEIPA_BIND_PASSWORD': request.form.get('bind_password', cfg['bind_password']),
+                'FREEIPA_DEFAULT_PRINCIPAL_EXP_DAYS': int(request.form.get('default_exp_days', cfg['default_exp_days'] or 0)),
+                'FREEIPA_DEFAULT_PRINCIPAL_EXP_HOURS': int(request.form.get('default_exp_hours', cfg['default_exp_hours'] or 0)),
+                'FREEIPA_UNSET_PRINCIPAL_EXP_ON_RESET': 'true' if request.form.get('unset_on_reset') in ['1', 'true', 'on'] else 'false',
             }
             # به‌روزرسانی config در حال اجرا
             for k, v in new_cfg.items():
                 if k == 'FREEIPA_PORT':
                     current_app.config[k] = int(v)
                 elif k == 'FREEIPA_USE_SSL':
+                    current_app.config[k] = (str(v).lower() in ['true', '1', 'on'])
+                elif k in ['FREEIPA_DEFAULT_PRINCIPAL_EXP_DAYS', 'FREEIPA_DEFAULT_PRINCIPAL_EXP_HOURS']:
+                    current_app.config[k] = int(v)
+                elif k == 'FREEIPA_UNSET_PRINCIPAL_EXP_ON_RESET':
                     current_app.config[k] = (str(v).lower() in ['true', '1', 'on'])
                 else:
                     current_app.config[k] = v
@@ -347,7 +357,10 @@ def servers():
                         f"FREEIPA_USE_SSL={new_cfg['FREEIPA_USE_SSL']}",
                         f"FREEIPA_BASE_DN={new_cfg['FREEIPA_BASE_DN']}",
                         f"FREEIPA_BIND_DN={new_cfg['FREEIPA_BIND_DN']}",
-                        f"FREEIPA_BIND_PASSWORD={new_cfg['FREEIPA_BIND_PASSWORD']}"
+                        f"FREEIPA_BIND_PASSWORD={new_cfg['FREEIPA_BIND_PASSWORD']}",
+                        f"FREEIPA_DEFAULT_PRINCIPAL_EXP_DAYS={new_cfg['FREEIPA_DEFAULT_PRINCIPAL_EXP_DAYS']}",
+                        f"FREEIPA_DEFAULT_PRINCIPAL_EXP_HOURS={new_cfg['FREEIPA_DEFAULT_PRINCIPAL_EXP_HOURS']}",
+                        f"FREEIPA_UNSET_PRINCIPAL_EXP_ON_RESET={new_cfg['FREEIPA_UNSET_PRINCIPAL_EXP_ON_RESET']}"
                     ]))
                 flash('تنظیمات ذخیره شد', 'success')
             except Exception as e:
@@ -363,6 +376,9 @@ def servers():
             'base_dn': current_app.config.get('FREEIPA_BASE_DN', ''),
             'bind_dn': current_app.config.get('FREEIPA_BIND_DN', ''),
             'bind_password': current_app.config.get('FREEIPA_BIND_PASSWORD', ''),
+            'default_exp_days': current_app.config.get('FREEIPA_DEFAULT_PRINCIPAL_EXP_DAYS', 3),
+            'default_exp_hours': current_app.config.get('FREEIPA_DEFAULT_PRINCIPAL_EXP_HOURS', 0),
+            'unset_on_reset': current_app.config.get('FREEIPA_UNSET_PRINCIPAL_EXP_ON_RESET', False),
         }
         return render_template('freeipa/servers.html', cfg=cfg)
     except Exception as e:
