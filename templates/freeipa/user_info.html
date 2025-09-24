@@ -79,10 +79,28 @@
                                 </div>
                             </form>
                             <small class="text-muted d-block mt-2">رمز جدید در سیستم ذخیره می‌شود تا بعداً برای تست/ارسال استفاده شود.</small>
-                            <form method="post" action="{{ url_for('freeipa.relax_user_password_policy_action', username=user.username) }}" class="mt-3">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button class="btn btn-outline-secondary">برداشتن اجبار تغییر رمز و تمدید انقضا</button>
-                            </form>
+                            <div class="d-flex flex-wrap gap-2 mt-3">
+                                <form method="post" action="{{ url_for('freeipa.relax_user_password_policy_action', username=user.username) }}" class="mr-2">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button class="btn btn-outline-secondary">برداشتن اجبار تغییر رمز و تمدید انقضا</button>
+                                </form>
+                                <form method="post" action="{{ url_for('freeipa.enable_user_action', username=user.username) }}" class="mr-2">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button class="btn btn-success">فعال‌سازی</button>
+                                </form>
+                                <form method="post" action="{{ url_for('freeipa.disable_user_action', username=user.username) }}" class="mr-2">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button class="btn btn-warning">غیرفعال‌سازی</button>
+                                </form>
+                                <form method="post" action="{{ url_for('freeipa.unlock_user_action', username=user.username) }}" class="mr-2">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button class="btn btn-info">Unlock</button>
+                                </form>
+                                <form method="post" action="{{ url_for('freeipa.lock_user_action', username=user.username) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button class="btn btn-danger">Lock</button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                     <hr>

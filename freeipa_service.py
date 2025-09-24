@@ -189,16 +189,32 @@ class FreeIPAService:
             logger.error(f"خطا در حذف کاربر از گروه: {e}")
             return False
 
-    def set_user_password(self, username: str, new_password: str, old_password: str | None = None) -> bool:
+    def set_user_password(self, username: str, new_password: str, old_password: str | None = None):
         """تعیین/ریست پسورد کاربر با Password Modify Extended Operation تا اجبار تغییر رفع شود."""
         try:
             config = self._get_config()
             user_dn = f"uid={username},cn=users,cn=accounts,{config['base_dn']}"
             conn = self._get_connection()
             if not conn or not conn.bind():
-                return False
+                return False, 'اتصال به FreeIPA برقرار نشد'
             # Use LDAP Password Modify Extended Operation
             ok = conn.extend.standard.modify_password(user=user_dn, new_password=new_password, old_password=old_password)
+            if not ok:
+                err = conn.result
+                # تلاش جایگزین: جایگزینی مستقیم userPassword (نیازمند دسترسی کافی)
+                try:
+                    from ldap3 import MODIFY_REPLACE
+                    alt_ok = conn.modify(user_dn, {'userPassword': [(MODIFY_REPLACE, [new_password])]})
+                    if alt_ok:
+                        ok = True
+                    else:
+                        # اگر باز هم خطا، پیام دقیق برگردد
+                        alt_err = conn.result
+                        conn.unbind()
+                        return False, f"Password modify failed: {err}; direct replace failed: {alt_err}"
+                except Exception as ex:
+                    conn.unbind()
+                    return False, f"Password modify failed: {err}; fallback error: {ex}"
             # Optionally relax policy to be safe
             if ok:
                 try:
@@ -214,11 +230,57 @@ class FreeIPAService:
                         pass
                 except Exception:
                     pass
+                # تنظیم خودکار principal expiration بر اساس تنظیمات پیش‌فرض
+                try:
+                    from flask import current_app
+                    rel_days = current_app.config.get('FREEIPA_DEFAULT_PRINCIPAL_EXP_DAYS', 3)
+                    rel_hours = current_app.config.get('FREEIPA_DEFAULT_PRINCIPAL_EXP_HOURS', 0)
+                    unset = current_app.config.get('FREEIPA_UNSET_PRINCIPAL_EXP_ON_RESET', False)
+                    # انجام در کانکشن جدید تا تداخل نداشته باشد
+                    self._adjust_user_expirations(username, rel_days=None if unset else rel_days, rel_hours=None if unset else rel_hours, unset=bool(unset))
+                except Exception:
+                    pass
             conn.unbind()
-            return ok
+            return (True, 'پسورد با موفقیت به‌روزرسانی شد') if ok else (False, 'خطای نامشخص در تغییر پسورد')
         except Exception as e:
             logger.error(f"خطا در تنظیم پسورد کاربر (extended op): {e}")
-            return False
+            return False, str(e)
+
+    def _adjust_user_expirations(self, username: str, rel_days: int | None, rel_hours: int | None, unset: bool = False) -> tuple[bool, str]:
+        """تنظیم خودکار انقضاها: krbPasswordExpiration بسیار دور، unlock، و krbPrincipalExpiration نسبی یا حذف."""
+        try:
+            from datetime import datetime, timedelta
+            from ldap3 import MODIFY_REPLACE, MODIFY_DELETE
+            cfg = self._get_config()
+            user_dn = f"uid={username},cn=users,cn=accounts,{cfg['base_dn']}"
+            conn = self._get_connection()
+            if not conn or not conn.bind():
+                return False, 'عدم امکان اتصال برای تنظیم انقضا'
+            # همیشه: برداشتن لاک و تمدید krbPasswordExpiration به دور
+            conn.modify(user_dn, {
+                'nsAccountLock': [(MODIFY_REPLACE, ['FALSE'])],
+                'krbPasswordExpiration': [(MODIFY_REPLACE, ['20380119031407Z'])]
+            })
+            try:
+                conn.modify(user_dn, {'krbLoginFailedCount': [(MODIFY_DELETE, [])]})
+            except Exception:
+                pass
+            # Principal expiration
+            if unset:
+                conn.modify(user_dn, {'krbPrincipalExpiration': [(MODIFY_DELETE, [])]})
+                conn.unbind()
+                return True, 'principal expiration حذف شد'
+            # relative set
+            days = int(rel_days or 0)
+            hours = int(rel_hours or 0)
+            target = datetime.utcnow() + timedelta(days=days, hours=hours)
+            zulu = target.strftime('%Y%m%d%H%M%SZ')
+            ok = conn.modify(user_dn, {'krbPrincipalExpiration': [(MODIFY_REPLACE, [zulu])]})
+            conn.unbind()
+            return (True, f'principal exp → {zulu}') if ok else (False, 'خطا در تنظیم principal exp')
+        except Exception as e:
+            logger.error(f"adjust expirations error: {e}")
+            return False, str(e)
 
     def relax_password_policy(self, username: str) -> bool:
         """برداشتن اجبار تغییر رمز و تمدید تاریخ انقضای پسورد، پاک‌کردن لاک/شکست‌ها"""
@@ -282,20 +344,13 @@ class FreeIPAService:
         """دریافت همه گروه‌های FreeIPA"""
         try:
             conn = self._get_connection()
-            if not conn:
-            return []
-    
+            if not conn: return []
             if conn.bind():
                 config = self._get_config()
                 base_groups = f"cn=groups,cn=accounts,{config['base_dn']}"
                 search_filter = "(objectClass=groupOfNames)"
-                conn.search(
-                    base_groups,
-                    search_filter,
-                    SUBTREE,
-                    attributes=['cn', 'description', 'gidNumber', 'member']
-                )
-
+                conn.search(base_groups, search_filter, SUBTREE,
+                           attributes=['cn', 'description', 'gidNumber', 'member'])
                 groups = []
                 for entry in conn.entries:
                     groups.append({
@@ -304,7 +359,6 @@ class FreeIPAService:
                         'gid_number': str(getattr(entry, 'gidNumber', '')) if hasattr(entry, 'gidNumber') else '',
                         'members': list(entry.member) if hasattr(entry, 'member') else []
                     })
-
                 conn.unbind()
                 return groups
             else:
@@ -325,6 +379,78 @@ class FreeIPAService:
                 return False, "اتصال ناموفق"
         except Exception as e:
             return False, f"خطا: {e}"
+
+    def enable_user(self, username: str) -> bool:
+        """فعال‌سازی حساب کاربر (nsAccountLock=FALSE)"""
+        try:
+            from ldap3 import MODIFY_REPLACE, MODIFY_DELETE
+            config = self._get_config()
+            user_dn = f"uid={username},cn=users,cn=accounts,{config['base_dn']}"
+            conn = self._get_connection()
+            if not conn or not conn.bind():
+                return False
+            ok = conn.modify(user_dn, {'nsAccountLock': [(MODIFY_REPLACE, ['FALSE'])]})
+            try:
+                conn.modify(user_dn, {'krbLoginFailedCount': [(MODIFY_DELETE, [])]})
+            except Exception:
+                pass
+            conn.unbind()
+            return ok
+        except Exception as e:
+            logger.error(f"خطا در فعال‌سازی کاربر: {e}")
+            return False
+
+    def disable_user(self, username: str) -> bool:
+        """غیرفعال‌سازی حساب کاربر (nsAccountLock=TRUE)"""
+        try:
+            from ldap3 import MODIFY_REPLACE
+            config = self._get_config()
+            user_dn = f"uid={username},cn=users,cn=accounts,{config['base_dn']}"
+            conn = self._get_connection()
+            if not conn or not conn.bind():
+                return False
+            ok = conn.modify(user_dn, {'nsAccountLock': [(MODIFY_REPLACE, ['TRUE'])]})
+            conn.unbind()
+            return ok
+        except Exception as e:
+            logger.error(f"خطا در غیرفعال‌سازی کاربر: {e}")
+            return False
+
+    def unlock_user(self, username: str) -> bool:
+        """آزاد کردن قفل کاربر: nsAccountLock=FALSE و پاک کردن شمارنده شکست"""
+        try:
+            from ldap3 import MODIFY_REPLACE, MODIFY_DELETE
+            config = self._get_config()
+            user_dn = f"uid={username},cn=users,cn=accounts,{config['base_dn']}"
+            conn = self._get_connection()
+            if not conn or not conn.bind():
+                return False
+            ok = conn.modify(user_dn, {'nsAccountLock': [(MODIFY_REPLACE, ['FALSE'])]})
+            try:
+                conn.modify(user_dn, {'krbLoginFailedCount': [(MODIFY_DELETE, [])]})
+            except Exception:
+                pass
+            conn.unbind()
+            return ok
+        except Exception as e:
+            logger.error(f"خطا در Unlock کاربر: {e}")
+            return False
+
+    def lock_user(self, username: str) -> bool:
+        """قفل کردن کاربر: nsAccountLock=TRUE"""
+        try:
+            from ldap3 import MODIFY_REPLACE
+            config = self._get_config()
+            user_dn = f"uid={username},cn=users,cn=accounts,{config['base_dn']}"
+            conn = self._get_connection()
+            if not conn or not conn.bind():
+                return False
+            ok = conn.modify(user_dn, {'nsAccountLock': [(MODIFY_REPLACE, ['TRUE'])]})
+            conn.unbind()
+            return ok
+        except Exception as e:
+            logger.error(f"خطا در Lock کاربر: {e}")
+            return False
 
 # ایجاد instance سراسری
 try:

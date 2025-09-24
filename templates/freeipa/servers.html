@@ -1,284 +1,77 @@
 {% extends "base.html" %}
 
-{% block title %}سرورهای FreeIPA{% endblock %}
+{% block title %}تنظیمات FreeIPA{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="page-header">
-                <h1><i class="fas fa-server"></i> مدیریت سرورهای FreeIPA</h1>
-                <p class="text-muted">تنظیم و مدیریت اتصالات FreeIPA</p>
-            </div>
-        </div>
+  <div class="row">
+    <div class="col-12">
+      <div class="page-header">
+        <h1><i class="fas fa-server"></i> تنظیمات FreeIPA</h1>
+        <p class="text-muted">مشخصات اتصال به سرور FreeIPA را اینجا تنظیم و تست کنید.</p>
+      </div>
     </div>
+  </div>
 
-    <!-- دکمه‌های عملیات -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <a href="{{ url_for('freeipa_add_server') }}" class="btn btn-primary">
-                                <i class="fas fa-plus"></i> افزودن سرور جدید
-                            </a>
-                        </div>
-                        <div class="col-md-6 text-left">
-                            <a href="{{ url_for('freeipa_dashboard') }}" class="btn btn-outline-secondary">
-                                <i class="fas fa-arrow-right"></i> بازگشت به داشبورد
-                            </a>
-                        </div>
-                    </div>
+  <div class="row">
+    <div class="col-lg-8 col-md-10">
+      <div class="card">
+        <div class="card-body">
+          <form method="POST">
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label>Host</label>
+                <input type="text" class="form-control" name="host" value="{{ cfg.host }}" required>
+              </div>
+              <div class="form-group col-md-3">
+                <label>Port</label>
+                <input type="number" class="form-control" name="port" value="{{ cfg.port or 389 }}" min="1" max="65535">
+              </div>
+              <div class="form-group col-md-3 d-flex align-items-end">
+                <div class="form-check">
+                  <input type="checkbox" class="form-check-input" id="use_ssl" name="use_ssl" {% if cfg.use_ssl %}checked{% endif %}>
+                  <label for="use_ssl" class="form-check-label">Use SSL</label>
                 </div>
+              </div>
             </div>
-        </div>
-    </div>
 
-    <!-- جدول سرورها -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-list"></i> لیست سرورها</h5>
-                </div>
-                <div class="card-body">
-                    {% if servers %}
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>نام</th>
-                                        <th>آدرس</th>
-                                        <th>پورت</th>
-                                        <th>SSL</th>
-                                        <th>وضعیت</th>
-                                        <th>آخرین تست</th>
-                                        <th>عملیات</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for server in servers %}
-                                    <tr>
-                                        <td>
-                                            <strong>{{ server.name }}</strong>
-                                            {% if server.is_active %}
-                                                <span class="badge badge-success badge-sm">فعال</span>
-                                            {% else %}
-                                                <span class="badge badge-secondary badge-sm">غیرفعال</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ server.hostname }}</td>
-                                        <td>{{ server.port }}</td>
-                                        <td>
-                                            {% if server.use_ssl %}
-                                                <i class="fas fa-lock text-success"></i> بله
-                                            {% else %}
-                                                <i class="fas fa-unlock text-warning"></i> خیر
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if server.connection_status == 'connected' %}
-                                                <span class="badge badge-success">متصل</span>
-                                            {% elif server.connection_status == 'failed' %}
-                                                <span class="badge badge-danger">خطا</span>
-                                            {% else %}
-                                                <span class="badge badge-warning">نامشخص</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if server.last_connection_test %}
-                                                {{ server.last_connection_test.strftime('%Y/%m/%d %H:%M') }}
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            <div class="btn-group" role="group">
-                                                <a href="{{ url_for('freeipa_test_server', server_id=server.id) }}" 
-                                                   class="btn btn-sm btn-outline-info" title="تست اتصال">
-                                                    <i class="fas fa-plug"></i>
-                                                </a>
-                                                <button type="button" class="btn btn-sm btn-outline-warning" 
-                                                        data-toggle="modal" data-target="#editServerModal{{ server.id }}" title="ویرایش">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                                <button type="button" class="btn btn-sm btn-outline-danger" 
-                                                        data-toggle="modal" data-target="#deleteServerModal{{ server.id }}" title="حذف">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-
-                                    <!-- Modal ویرایش سرور -->
-                                    <div class="modal fade" id="editServerModal{{ server.id }}" tabindex="-1">
-                                        <div class="modal-dialog modal-lg">
-                                            <div class="modal-content">
-                                                <div class="modal-header">
-                                                    <h5 class="modal-title">ویرایش سرور - {{ server.name }}</h5>
-                                                    <button type="button" class="close" data-dismiss="modal">
-                                                        <span>&times;</span>
-                                                    </button>
-                                                </div>
-                                                <form method="POST" action="{{ url_for('freeipa_edit_server', server_id=server.id) }}">
-                                                    <div class="modal-body">
-                                                        <div class="row">
-                                                            <div class="col-md-6">
-                                                                <div class="form-group">
-                                                                    <label for="name{{ server.id }}">نام سرور</label>
-                                                                    <input type="text" class="form-control" id="name{{ server.id }}" 
-                                                                           name="name" value="{{ server.name }}" required>
-                                                                </div>
-                                                            </div>
-                                                            <div class="col-md-6">
-                                                                <div class="form-group">
-                                                                    <label for="hostname{{ server.id }}">آدرس سرور</label>
-                                                                    <input type="text" class="form-control" id="hostname{{ server.id }}" 
-                                                                           name="hostname" value="{{ server.hostname }}" required>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div class="row">
-                                                            <div class="col-md-4">
-                                                                <div class="form-group">
-                                                                    <label for="port{{ server.id }}">پورت</label>
-                                                                    <input type="number" class="form-control" id="port{{ server.id }}" 
-                                                                           name="port" value="{{ server.port }}" min="1" max="65535">
-                                                                </div>
-                                                            </div>
-                                                            <div class="col-md-4">
-                                                                <div class="form-group">
-                                                                    <div class="form-check mt-4">
-                                                                        <input type="checkbox" class="form-check-input" id="use_ssl{{ server.id }}" 
-                                                                               name="use_ssl" {% if server.use_ssl %}checked{% endif %}>
-                                                                        <label class="form-check-label" for="use_ssl{{ server.id }}">
-                                                                            استفاده از SSL
-                                                                        </label>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div class="col-md-4">
-                                                                <div class="form-group">
-                                                                    <div class="form-check mt-4">
-                                                                        <input type="checkbox" class="form-check-input" id="is_active{{ server.id }}" 
-                                                                               name="is_active" {% if server.is_active %}checked{% endif %}>
-                                                                        <label class="form-check-label" for="is_active{{ server.id }}">
-                                                                            سرور فعال
-                                                                        </label>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div class="row">
-                                                            <div class="col-md-6">
-                                                                <div class="form-group">
-                                                                    <label for="base_dn{{ server.id }}">Base DN</label>
-                                                                    <input type="text" class="form-control" id="base_dn{{ server.id }}" 
-                                                                           name="base_dn" value="{{ server.base_dn }}" required>
-                                                                </div>
-                                                            </div>
-                                                            <div class="col-md-6">
-                                                                <div class="form-group">
-                                                                    <label for="bind_dn{{ server.id }}">Bind DN</label>
-                                                                    <input type="text" class="form-control" id="bind_dn{{ server.id }}" 
-                                                                           name="bind_dn" value="{{ server.bind_dn }}" required>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div class="form-group">
-                                                            <label for="bind_password{{ server.id }}">رمز عبور جدید (اختیاری)</label>
-                                                            <input type="password" class="form-control" id="bind_password{{ server.id }}" 
-                                                                   name="bind_password" placeholder="خالی بگذارید تا تغییر نکند">
-                                                        </div>
-                                                    </div>
-                                                    <div class="modal-footer">
-                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">انصراف</button>
-                                                        <button type="submit" class="btn btn-warning">ذخیره تغییرات</button>
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Modal حذف سرور -->
-                                    <div class="modal fade" id="deleteServerModal{{ server.id }}" tabindex="-1">
-                                        <div class="modal-dialog">
-                                            <div class="modal-content">
-                                                <div class="modal-header">
-                                                    <h5 class="modal-title">حذف سرور</h5>
-                                                    <button type="button" class="close" data-dismiss="modal">
-                                                        <span>&times;</span>
-                                                    </button>
-                                                </div>
-                                                <div class="modal-body">
-                                                    <p>آیا از حذف سرور <strong>{{ server.name }}</strong> اطمینان دارید؟</p>
-                                                    <p class="text-danger">این عمل قابل بازگشت نیست!</p>
-                                                </div>
-                                                <div class="modal-footer">
-                                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">انصراف</button>
-                                                    <form method="POST" action="{{ url_for('freeipa_delete_server', server_id=server.id) }}" style="display: inline;">
-                                                        <button type="submit" class="btn btn-danger">حذف</button>
-                                                    </form>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    {% else %}
-                        <div class="text-center py-5">
-                            <i class="fas fa-server fa-3x text-muted mb-3"></i>
-                            <h5 class="text-muted">هیچ سروری یافت نشد</h5>
-                            <p class="text-muted">برای شروع، یک سرور FreeIPA اضافه کنید</p>
-                            <a href="{{ url_for('freeipa_add_server') }}" class="btn btn-primary">
-                                <i class="fas fa-plus"></i> افزودن سرور جدید
-                            </a>
-                        </div>
-                    {% endif %}
-                </div>
+            <div class="form-row">
+              <div class="form-group col-md-12">
+                <label>Base DN</label>
+                <input type="text" class="form-control" name="base_dn" value="{{ cfg.base_dn }}" placeholder="dc=mci,dc=local" required>
+              </div>
             </div>
+
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label>Bind DN</label>
+                <input type="text" class="form-control" name="bind_dn" value="{{ cfg.bind_dn }}" placeholder="uid=admin,cn=users,cn=accounts,dc=mci,dc=local" required>
+              </div>
+              <div class="form-group col-md-6">
+                <label>Bind Password</label>
+                <input type="password" class="form-control" name="bind_password" value="{{ cfg.bind_password }}">
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-between">
+              <button type="submit" name="action" value="save" class="btn btn-primary">
+                <i class="fas fa-save"></i> ذخیره تنظیمات
+              </button>
+              <button type="submit" name="action" value="test" class="btn btn-outline-info">
+                <i class="fas fa-plug"></i> تست اتصال
+              </button>
+              <a href="{{ url_for('freeipa.dashboard') }}" class="btn btn-light">بازگشت</a>
+            </div>
+          </form>
         </div>
+      </div>
     </div>
+  </div>
 </div>
 
 <style>
-.card {
-    border: none;
-    border-radius: 15px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(20px);
-    background: rgba(255, 255, 255, 0.95);
-}
-
-.card-header {
-    background: rgba(255, 255, 255, 0.1);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-    border-radius: 15px 15px 0 0;
-}
-
-.table th {
-    border-top: none;
-    font-weight: 600;
-    color: #2d3748;
-    background: rgba(0, 0, 0, 0.02);
-}
-
-.btn-group .btn {
-    margin-left: 2px;
-}
-
-.modal-content {
-    border-radius: 15px;
-    border: none;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-}
-
-.badge-sm {
-    font-size: 0.7rem;
-    padding: 0.25rem 0.5rem;
-}
+.card { border: none; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.08); }
+.page-header h1 { font-size: 1.6rem; margin-bottom: .25rem; }
+.page-header p { margin-bottom: 1rem; }
 </style>
 {% endblock %}

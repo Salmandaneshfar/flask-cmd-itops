@@ -89,7 +89,7 @@ def reset_user_password_action(username):
         if not new_password:
             alphabet = string.ascii_letters + string.digits + '!@#$%^&*()'
             new_password = ''.join(secrets.choice(alphabet) for _ in range(12))
-        ok = freeipa_service.set_user_password(username, new_password)
+        ok, msg = freeipa_service.set_user_password(username, new_password)
         if ok:
             from models import db, FreeIPAUser, UserPassword
             freeipa_user = FreeIPAUser.query.filter_by(uid=username).first()
@@ -98,12 +98,12 @@ def reset_user_password_action(username):
                 db.session.add(freeipa_user)
                 db.session.flush()
             up = UserPassword(user_id=freeipa_user.id, password_type='reset', created_by=1)
-            up.set_password_raw(new_password)
+            up.set_password(new_password)
             db.session.add(up)
             db.session.commit()
             flash('پسورد ریست شد و برای ارسال/مرجع ذخیره شد', 'success')
         else:
-            flash('خطا در ریست پسورد', 'error')
+            flash(f'خطا در ریست پسورد: {msg}', 'error')
     except Exception as e:
         from models import db
         db.session.rollback()
@@ -159,6 +159,42 @@ def delete_user_action(username):
     except Exception as e:
         flash(f'خطا: {e}', 'error')
     return redirect(url_for('freeipa.list_users'))
+
+@freeipa_bp.route('/user/<username>/enable', methods=['POST'])
+def enable_user_action(username):
+    try:
+        ok = freeipa_service.enable_user(username)
+        flash('کاربر فعال شد' if ok else 'خطا در فعال‌سازی کاربر', 'success' if ok else 'error')
+    except Exception as e:
+        flash(f'خطا: {e}', 'error')
+    return redirect(url_for('freeipa.user_info', username=username))
+
+@freeipa_bp.route('/user/<username>/disable', methods=['POST'])
+def disable_user_action(username):
+    try:
+        ok = freeipa_service.disable_user(username)
+        flash('کاربر غیرفعال شد' if ok else 'خطا در غیرفعال‌سازی کاربر', 'success' if ok else 'error')
+    except Exception as e:
+        flash(f'خطا: {e}', 'error')
+    return redirect(url_for('freeipa.user_info', username=username))
+
+@freeipa_bp.route('/user/<username>/unlock', methods=['POST'])
+def unlock_user_action(username):
+    try:
+        ok = freeipa_service.unlock_user(username)
+        flash('قفل کاربر باز شد' if ok else 'خطا در Unlock کاربر', 'success' if ok else 'error')
+    except Exception as e:
+        flash(f'خطا: {e}', 'error')
+    return redirect(url_for('freeipa.user_info', username=username))
+
+@freeipa_bp.route('/user/<username>/lock', methods=['POST'])
+def lock_user_action(username):
+    try:
+        ok = freeipa_service.lock_user(username)
+        flash('کاربر قفل شد' if ok else 'خطا در Lock کاربر', 'success' if ok else 'error')
+    except Exception as e:
+        flash(f'خطا: {e}', 'error')
+    return redirect(url_for('freeipa.user_info', username=username))
 
 @freeipa_bp.route('/groups')
 def groups():
@@ -256,7 +292,7 @@ def add_user():
         db.session.add(freeipa_user)
         db.session.flush()
         up = UserPassword(user_id=freeipa_user.id, password_type='initial', created_by=1)  # TODO: current_user.id
-        up.set_password_raw(password)
+        up.set_password(password)
         db.session.add(up)
         db.session.commit()
 
@@ -269,13 +305,68 @@ def add_user():
         flash(f'خطا: {e}', 'error')
         return redirect(url_for('freeipa.add_user'))
 
-@freeipa_bp.route('/servers')
+@freeipa_bp.route('/servers', methods=['GET', 'POST'])
 def servers():
-    """تنظیمات سرور (الگو موجود)"""
+    """تنظیمات سرور FreeIPA: مشاهده/ذخیره و تست اتصال"""
     try:
-        return render_template('freeipa/servers.html')
+        from flask import current_app
+        import os
+        cfg = {
+            'host': current_app.config.get('FREEIPA_HOST', ''),
+            'port': current_app.config.get('FREEIPA_PORT', 389),
+            'use_ssl': current_app.config.get('FREEIPA_USE_SSL', False),
+            'base_dn': current_app.config.get('FREEIPA_BASE_DN', ''),
+            'bind_dn': current_app.config.get('FREEIPA_BIND_DN', ''),
+            'bind_password': current_app.config.get('FREEIPA_BIND_PASSWORD', ''),
+        }
+        if request.method == 'POST':
+            action = request.form.get('action', 'save')
+            new_cfg = {
+                'FREEIPA_HOST': request.form.get('host', cfg['host']).strip(),
+                'FREEIPA_PORT': int(request.form.get('port', cfg['port'])),
+                'FREEIPA_USE_SSL': 'true' if request.form.get('use_ssl') in ['1', 'true', 'on'] else 'false',
+                'FREEIPA_BASE_DN': request.form.get('base_dn', cfg['base_dn']).strip(),
+                'FREEIPA_BIND_DN': request.form.get('bind_dn', cfg['bind_dn']).strip(),
+                'FREEIPA_BIND_PASSWORD': request.form.get('bind_password', cfg['bind_password']),
+            }
+            # به‌روزرسانی config در حال اجرا
+            for k, v in new_cfg.items():
+                if k == 'FREEIPA_PORT':
+                    current_app.config[k] = int(v)
+                elif k == 'FREEIPA_USE_SSL':
+                    current_app.config[k] = (str(v).lower() in ['true', '1', 'on'])
+                else:
+                    current_app.config[k] = v
+            # ذخیره در فایل env محلی (اختیاری / در .gitignore)
+            try:
+                env_path = os.path.join(current_app.root_path, 'freeipa_config.env')
+                with open(env_path, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join([
+                        f"FREEIPA_HOST={new_cfg['FREEIPA_HOST']}",
+                        f"FREEIPA_PORT={new_cfg['FREEIPA_PORT']}",
+                        f"FREEIPA_USE_SSL={new_cfg['FREEIPA_USE_SSL']}",
+                        f"FREEIPA_BASE_DN={new_cfg['FREEIPA_BASE_DN']}",
+                        f"FREEIPA_BIND_DN={new_cfg['FREEIPA_BIND_DN']}",
+                        f"FREEIPA_BIND_PASSWORD={new_cfg['FREEIPA_BIND_PASSWORD']}"
+                    ]))
+                flash('تنظیمات ذخیره شد', 'success')
+            except Exception as e:
+                flash(f'ذخیره فایل تنظیمات ناموفق بود: {e}', 'error')
+            if action == 'test':
+                ok, msg = freeipa_service.test_connection()
+                flash(msg, 'success' if ok else 'error')
+        # بازخوانی برای نمایش
+        cfg = {
+            'host': current_app.config.get('FREEIPA_HOST', ''),
+            'port': current_app.config.get('FREEIPA_PORT', 389),
+            'use_ssl': current_app.config.get('FREEIPA_USE_SSL', False),
+            'base_dn': current_app.config.get('FREEIPA_BASE_DN', ''),
+            'bind_dn': current_app.config.get('FREEIPA_BIND_DN', ''),
+            'bind_password': current_app.config.get('FREEIPA_BIND_PASSWORD', ''),
+        }
+        return render_template('freeipa/servers.html', cfg=cfg)
     except Exception as e:
-        flash(f'خطا در نمایش تنظیمات سرور: {e}', 'error')
+        flash(f'خطا در نمایش/ذخیره تنظیمات سرور: {e}', 'error')
         return redirect(url_for('freeipa.dashboard'))
 
 @freeipa_bp.route('/login', methods=['GET', 'POST'])
