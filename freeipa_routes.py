@@ -263,7 +263,6 @@ def add_user():
             'homeDirectory': f"/home/{uid}",
             'uidNumber': '10000',
             'gidNumber': '10000',
-            'userPassword': password,
             'krbPrincipalName': f"{uid}@{cfg['base_dn'].replace('dc=','').replace(',', '.').upper()}"
         }
         if mobile:
@@ -275,6 +274,18 @@ def add_user():
             conn.unbind()
             flash(f"خطا در ایجاد کاربر: {err}", 'error')
             return redirect(url_for('freeipa.add_user'))
+
+        # ست‌کردن رمز با RFC 3062 تا اجبار تغییر فعال نشود
+        try:
+            pwd_ok, pwd_msg = freeipa_service.set_user_password(uid, password)
+            if not pwd_ok:
+                conn.unbind()
+                flash(f"کاربر ایجاد شد ولی خطا در تعیین رمز: {pwd_msg}", 'error')
+                return redirect(url_for('freeipa.list_users'))
+        except Exception as ex:
+            conn.unbind()
+            flash(f"کاربر ایجاد شد ولی خطا در تعیین رمز: {ex}", 'error')
+            return redirect(url_for('freeipa.list_users'))
 
         # افزودن به گروه‌ها
         for cn_group in selected_groups:
@@ -288,9 +299,19 @@ def add_user():
 
         # ذخیره پسورد برای SMS در DB (متن‌واضح برای ارسال بعدی)
         from models import db, FreeIPAUser, UserPassword
-        freeipa_user = FreeIPAUser(uid=uid, cn=cn, sn=sn, givenname=givenname, mail=mail, mobile=mobile)
-        db.session.add(freeipa_user)
-        db.session.flush()
+        freeipa_user = FreeIPAUser.query.filter_by(uid=uid).first()
+        if not freeipa_user:
+            freeipa_user = FreeIPAUser(uid=uid, cn=cn, sn=sn, givenname=givenname, mail=mail, mobile=mobile)
+            db.session.add(freeipa_user)
+            db.session.flush()
+        else:
+            # به‌روزرسانی اطلاعات در صورت تغییر
+            freeipa_user.cn = cn
+            freeipa_user.sn = sn
+            freeipa_user.givenname = givenname
+            freeipa_user.mail = mail
+            freeipa_user.mobile = mobile
+
         up = UserPassword(user_id=freeipa_user.id, password_type='initial', created_by=1)  # TODO: current_user.id
         up.set_password(password)
         db.session.add(up)
@@ -398,7 +419,7 @@ def login():
                 if success:
                     flash(f'ورود موفق! خوش آمدید {user_info["full_name"]}', 'success')
                     # اینجا می‌توانید session را تنظیم کنید
-                    return redirect(url_for('index'))
+                    return redirect(url_for('freeipa.dashboard'))
                 else:
                     flash('نام کاربری یا رمز عبور اشتباه است', 'error')
             except Exception as e:
@@ -458,3 +479,27 @@ def api_user_info(username):
             'success': False,
             'message': str(e)
         }), 500
+
+@freeipa_bp.route('/self-change-password', methods=['GET', 'POST'])
+def self_change_password():
+    try:
+        if request.method == 'POST':
+            username = request.form.get('username', '').strip()
+            current_password = request.form.get('current_password', '')
+            new_password = request.form.get('new_password', '')
+            confirm_password = request.form.get('confirm_password', '')
+            if not username or not current_password or not new_password:
+                flash('همه فیلدها الزامی است', 'error')
+                return redirect(url_for('freeipa.self_change_password'))
+            if new_password != confirm_password:
+                flash('تکرار رمز با رمز جدید یکسان نیست', 'error')
+                return redirect(url_for('freeipa.self_change_password'))
+            ok, msg = freeipa_service.change_password_self(username, current_password, new_password)
+            flash(msg, 'success' if ok else 'error')
+            if ok:
+                return redirect(url_for('freeipa.dashboard'))
+            return redirect(url_for('freeipa.self_change_password'))
+        return render_template('freeipa/self_change_password.html')
+    except Exception as e:
+        flash(f'خطا: {e}', 'error')
+        return redirect(url_for('freeipa.dashboard'))

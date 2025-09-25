@@ -195,6 +195,13 @@ class FreeIPAService:
             config = self._get_config()
             user_dn = f"uid={username},cn=users,cn=accounts,{config['base_dn']}"
             conn = self._get_connection()
+            # اطمینان از محرمانگی: در صورت نبود SSL، StartTLS را تلاش کن
+            try:
+                if conn and not config['use_ssl']:
+                    conn.open()
+                    conn.start_tls()
+            except Exception:
+                pass
             if not conn or not conn.bind():
                 return False, 'اتصال به FreeIPA برقرار نشد'
             # Use LDAP Password Modify Extended Operation
@@ -207,7 +214,7 @@ class FreeIPAService:
                     alt_ok = conn.modify(user_dn, {'userPassword': [(MODIFY_REPLACE, [new_password])]})
                     if alt_ok:
                         ok = True
-                    else:
+            else:
                         # اگر باز هم خطا، پیام دقیق برگردد
                         alt_err = conn.result
                         conn.unbind()
@@ -235,7 +242,7 @@ class FreeIPAService:
                     from flask import current_app
                     rel_days = current_app.config.get('FREEIPA_DEFAULT_PRINCIPAL_EXP_DAYS', 3)
                     rel_hours = current_app.config.get('FREEIPA_DEFAULT_PRINCIPAL_EXP_HOURS', 0)
-                    unset = current_app.config.get('FREEIPA_UNSET_PRINCIPAL_EXP_ON_RESET', False)
+                    unset = current_app.config.get('FREEIPA_UNSET_PRINCIPAL_EXP_ON_RESET', True)
                     # انجام در کانکشن جدید تا تداخل نداشته باشد
                     self._adjust_user_expirations(username, rel_days=None if unset else rel_days, rel_hours=None if unset else rel_hours, unset=bool(unset))
                 except Exception:
@@ -245,7 +252,7 @@ class FreeIPAService:
         except Exception as e:
             logger.error(f"خطا در تنظیم پسورد کاربر (extended op): {e}")
             return False, str(e)
-
+    
     def _adjust_user_expirations(self, username: str, rel_days: int | None, rel_hours: int | None, unset: bool = False) -> tuple[bool, str]:
         """تنظیم خودکار انقضاها: krbPasswordExpiration بسیار دور، unlock، و krbPrincipalExpiration نسبی یا حذف."""
         try:
@@ -281,7 +288,7 @@ class FreeIPAService:
         except Exception as e:
             logger.error(f"adjust expirations error: {e}")
             return False, str(e)
-
+    
     def relax_password_policy(self, username: str) -> bool:
         """برداشتن اجبار تغییر رمز و تمدید تاریخ انقضای پسورد، پاک‌کردن لاک/شکست‌ها"""
         try:
@@ -451,6 +458,44 @@ class FreeIPAService:
         except Exception as e:
             logger.error(f"خطا در Lock کاربر: {e}")
             return False
+
+    def change_password_self(self, username: str, current_password: str, new_password: str):
+        """تغییر رمز توسط خود کاربر: bind با کاربر و اجرای RFC 3062 با old/new."""
+        try:
+            cfg = self._get_config()
+            user_dn = f"uid={username},cn=users,cn=accounts,{cfg['base_dn']}"
+            server = Server(cfg['host'], port=cfg['port'], use_ssl=cfg['use_ssl'])
+            conn = Connection(server, user=user_dn, password=current_password)
+            # اگر SSL نداریم، StartTLS را اجرا کن تا خطای confidentialityRequired رفع شود
+            try:
+                if not cfg['use_ssl']:
+                    conn.open()
+                    conn.start_tls()
+            except Exception:
+                pass
+            if not conn.bind():
+                return False, 'نام کاربری یا رمز فعلی اشتباه است'
+            ok = conn.extend.standard.modify_password(user=None, old_password=current_password, new_password=new_password)
+            if not ok:
+                err = conn.result
+                conn.unbind()
+                # اگر محدودیت «Too soon to change password» بود، به صورت پیش‌فرض با دسترسی ادمین ریست کنیم
+                try:
+                    from flask import current_app
+                    allow_admin_fallback = current_app.config.get('FREEIPA_SELF_CHANGE_ADMIN_FALLBACK', True)
+                except Exception:
+                    allow_admin_fallback = True
+                if allow_admin_fallback and str(err).find('Too soon to change password') != -1:
+                    admin_ok, admin_msg = self.set_user_password(username, new_password)
+                    if admin_ok:
+                        return True, 'رمز توسط ادمین تنظیم شد (به علت محدودیت فاصله زمانی سیاست).'
+                    return False, f"خطا در تغییر رمز (سیاست زمان حداقل): {admin_msg}"
+                return False, f"خطا در تغییر رمز: {err}"
+            conn.unbind()
+            return True, 'رمز با موفقیت تغییر کرد'
+        except Exception as e:
+            logger.error(f"self change password error: {e}")
+            return False, str(e)
 
 # ایجاد instance سراسری
 try:
