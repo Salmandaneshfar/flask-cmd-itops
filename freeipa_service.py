@@ -148,7 +148,7 @@ class FreeIPAService:
         user_info = self.get_user_info(username)
         if user_info:
             return user_info.get('groups', [])
-            return []
+        return []
     
     def is_user_in_group(self, username, group_name):
         """بررسی عضویت کاربر در گروه"""
@@ -214,7 +214,7 @@ class FreeIPAService:
                     alt_ok = conn.modify(user_dn, {'userPassword': [(MODIFY_REPLACE, [new_password])]})
                     if alt_ok:
                         ok = True
-            else:
+                    else:
                         # اگر باز هم خطا، پیام دقیق برگردد
                         alt_err = conn.result
                         conn.unbind()
@@ -247,6 +247,25 @@ class FreeIPAService:
                     self._adjust_user_expirations(username, rel_days=None if unset else rel_days, rel_hours=None if unset else rel_hours, unset=bool(unset))
                 except Exception:
                     pass
+            # راستی‌آزمایی: با همان پسورد جدید لاگینِ کاربر را تست کن
+            try:
+                verify_server = Server(config['host'], port=config['port'], use_ssl=config['use_ssl'])
+                verify_conn = Connection(verify_server, user=user_dn, password=new_password)
+                if not config['use_ssl']:
+                    try:
+                        verify_conn.open()
+                        verify_conn.start_tls()
+                    except Exception:
+                        pass
+                if not verify_conn.bind():
+                    try:
+                        conn.unbind()
+                    except Exception:
+                        pass
+                    return False, 'پسورد تنظیم شد اما احراز هویت کاربر با پسورد جدید موفق نشد (policy/TLS).'
+                verify_conn.unbind()
+            except Exception:
+                pass
             conn.unbind()
             return (True, 'پسورد با موفقیت به‌روزرسانی شد') if ok else (False, 'خطای نامشخص در تغییر پسورد')
         except Exception as e:
@@ -499,16 +518,12 @@ class FreeIPAService:
 
 # ایجاد instance سراسری
 try:
-    # تلاش برای اتصال به FreeIPA واقعی
-    test_service = FreeIPAService()
-    success, _ = test_service.test_connection()
-    if success:
-        freeipa_service = test_service
-    else:
-        # استفاده از Mock در صورت عدم اتصال
+    use_mock = os.environ.get('FREEIPA_USE_MOCK', 'false').lower() in ['true', '1', 'on']
+    if use_mock:
         from freeipa_mock import freeipa_mock_service
         freeipa_service = freeipa_mock_service
-except:
-    # استفاده از Mock در صورت خطا
-    from freeipa_mock import freeipa_mock_service
-    freeipa_service = freeipa_mock_service
+    else:
+        freeipa_service = FreeIPAService()
+except Exception:
+    # در صورت بروز خطای غیرمنتظره، همچنان سرویس واقعی را برمی‌گردانیم تا خطاها نمایان شوند
+    freeipa_service = FreeIPAService()

@@ -31,3 +31,13 @@ Thumbs.db
 .vscode/
 .idea/
 *.code-workspace
+.venv312/
+venv/
+instance/*.db
+logs/
+backups/
+*.sql.gz
+*.db
+.env
+production.env
+freeipa_config.env
