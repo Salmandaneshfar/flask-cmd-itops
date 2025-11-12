@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block page_title %}باز کردن خزانه{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header"><h5 class="mb-0"><i class="fas fa-unlock"></i> باز کردن خزانه</h5></div>
+      <div class="card-body">
+        <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label class="form-label">مسترپسورد</label>
+            <input type="password" class="form-control" name="master_password" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Unlock</button>
+          <a href="{{ url_for('profile') }}" class="btn btn-secondary">بازگشت</a>
+        </form>
+        <hr>
+        <div class="alert alert-warning">
+          <div class="mb-2"><i class="fas fa-exclamation-triangle"></i> اگر مسترپسورد را فراموش کرده‌اید، می‌توانید خزانه را بازنشانی کنید. توجه: رمزهایی که با خزانهٔ کاربر رمز شده‌اند (user-encrypted) پس از بازنشانی دیگر قابل بازیابی نخواهند بود.</div>
+          <form method="POST" action="{{ url_for('vault_reset') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="confirm" value="1">
+            <button type="submit" class="btn btn-outline-danger">بازنشانی خزانه</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+

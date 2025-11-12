@@ -207,6 +207,7 @@ function updateTaskStatus(taskId, status) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
     },
     body: JSON.stringify({status: status})
   })
@@ -229,6 +230,11 @@ function deleteTask(taskId) {
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = `/tasks/delete/${taskId}`;
+    const csrf = document.createElement('input');
+    csrf.type = 'hidden';
+    csrf.name = 'csrf_token';
+    csrf.value = '{{ csrf_token() }}';
+    form.appendChild(csrf);
     document.body.appendChild(form);
     form.submit();
   }

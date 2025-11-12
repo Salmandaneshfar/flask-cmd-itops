@@ -30,6 +30,13 @@ class Config:
     
     # تنظیمات session
     PERMANENT_SESSION_LIFETIME = timedelta(seconds=int(os.environ.get('PERMANENT_SESSION_LIFETIME', 86400)))
+    # Cookie hardening
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = os.environ.get('SESSION_COOKIE_SAMESITE', 'Lax')
+    SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() in ['true', 'on', '1']
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = os.environ.get('REMEMBER_COOKIE_SAMESITE', 'Lax')
+    REMEMBER_COOKIE_SECURE = os.environ.get('REMEMBER_COOKIE_SECURE', 'false').lower() in ['true', 'on', '1']
     
     # تنظیمات آپلود فایل
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'static/uploads')
@@ -66,6 +73,13 @@ class Config:
     FREEIPA_BASE_DN = os.environ.get('FREEIPA_BASE_DN', 'dc=mci,dc=local')
     FREEIPA_BIND_DN = os.environ.get('FREEIPA_BIND_DN', 'uid=admin,cn=users,cn=accounts,dc=mci,dc=local')
     FREEIPA_BIND_PASSWORD = os.environ.get('FREEIPA_BIND_PASSWORD', '')
+    
+    # کلید رمزنگاری Credential ها (Fernet key base64)
+    CREDENTIALS_KEY = os.environ.get('CREDENTIALS_KEY')
+    
+    # Vault session TTL (seconds)
+    VAULT_SESSION_TTL_SECONDS = int(os.environ.get('VAULT_SESSION_TTL_SECONDS', 300))
+    # Redis for vault session (fallback به memory در نبود Redis)
 
 class DevelopmentConfig(Config):
     DEBUG = True
@@ -74,6 +88,9 @@ class DevelopmentConfig(Config):
 class ProductionConfig(Config):
     DEBUG = False
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or f"sqlite:///{DEFAULT_SQLITE_PATH}"
+    # Prefer secure cookies in production by default (can be overridden via env)
+    SESSION_COOKIE_SECURE = True
+    REMEMBER_COOKIE_SECURE = True
 
 class TestingConfig(Config):
     TESTING = True

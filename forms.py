@@ -178,6 +178,16 @@ class BackupForm(FlaskForm):
     submit = SubmitField('ذخیره')
 
 ## SearchForm removed per product decision
+class SearchForm(FlaskForm):
+    query = StringField('جستجو', validators=[Optional()])
+    search_type = SelectField('نوع جستجو', choices=[
+        ('all', 'همه'),
+        ('users', 'کاربران'),
+        ('servers', 'سرورها'),
+        ('tasks', 'تسک‌ها'),
+        ('content', 'محتوا')
+    ], validators=[Optional()])
+    submit = SubmitField('جستجو')
 
 class CustomFieldForm(FlaskForm):
     name = StringField('نام فیلد (انگلیسی)', validators=[DataRequired(), Length(min=2, max=100)])

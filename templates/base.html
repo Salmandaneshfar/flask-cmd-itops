@@ -1015,8 +1015,13 @@
         });
     }
     
+    function getCsrf() {
+      const meta = document.querySelector('meta[name=\"csrf-token\"]');
+      return meta ? meta.getAttribute('content') : '';
+    }
+    
     function markAsRead(notificationId) {
-      fetch(`/api/notifications/${notificationId}/read`, { method: 'POST' })
+      fetch(`/api/notifications/${notificationId}/read`, { method: 'POST', headers: { 'X-CSRFToken': getCsrf() } })
         .then(response => response.json())
         .then(data => {
           if (data.success) {
@@ -1026,7 +1031,7 @@
     }
     
     function markAllAsRead() {
-      fetch('/api/notifications/read-all', { method: 'POST' })
+      fetch('/api/notifications/read-all', { method: 'POST', headers: { 'X-CSRFToken': getCsrf() } })
         .then(response => response.json())
         .then(data => {
           if (data.success) {

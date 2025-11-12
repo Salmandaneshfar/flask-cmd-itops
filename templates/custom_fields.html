@@ -303,6 +303,7 @@ async function deleteField(fieldId) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
       }
     });
     
@@ -330,6 +331,7 @@ async function toggleField(fieldId) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
       }
     });
     

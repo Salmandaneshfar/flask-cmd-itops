@@ -18,6 +18,13 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
+    # Vault (KeePass-like) fields
+    vault_kdf_salt = db.Column(db.Text)  # base64 salt
+    vault_wrapped_dek = db.Column(db.Text)  # base64(nonce+ciphertext)
+    vault_wrapped_alg = db.Column(db.String(8))  # 'v1' (AESGCM) | 'v2' (Fernet)
+    vault_kdf_n = db.Column(db.Integer)  # e.g., 16384
+    vault_kdf_r = db.Column(db.Integer)  # e.g., 8
+    vault_kdf_p = db.Column(db.Integer)  # e.g., 1
     
     def set_password(self, password):
         # استفاده اجباری از pbkdf2:sha256 برای سازگاری
@@ -86,6 +93,9 @@ class User(UserMixin, db.Model):
     
     def __repr__(self):
         return f'<User {self.username}>'
+    
+    def is_vault_initialized(self) -> bool:
+        return bool(self.vault_kdf_salt and self.vault_wrapped_dek and self.vault_kdf_n and self.vault_kdf_r and self.vault_kdf_p)
 
 class Server(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -233,7 +243,9 @@ class Credential(db.Model):
     name = db.Column(db.String(200), nullable=False)  # نام سرویس/اپلیکیشن
     service_type = db.Column(db.String(50), nullable=False)  # نوع سرویس (server, app, database, etc.)
     username = db.Column(db.String(200), nullable=False)
-    password = db.Column(db.Text, nullable=False)  # رمز عبور رمزنگاری شده
+    password = db.Column(db.Text, nullable=False)  # هش قدیمی (برای سازگاری)
+    password_encrypted = db.Column(db.Text)  # رمزنگاری متقارن برای نمایش امن
+    encrypted_with = db.Column(db.String(16), default='global')  # global | user | org
     url = db.Column(db.String(500))  # آدرس سرویس
     description = db.Column(db.Text)  # توضیحات
     tags = db.Column(db.String(500))  # برچسب‌ها (comma separated)
@@ -246,9 +258,32 @@ class Credential(db.Model):
     user = db.relationship('User', backref='credentials')
     
     def set_password(self, password):
-        """رمزنگاری پسورد"""
+        """هش قدیمی برای سازگاری (عدم نمایش)."""
         from werkzeug.security import generate_password_hash
         self.password = generate_password_hash(password)
+    
+    def set_encrypted_password(self, password: str):
+        """رمزنگاری متقارن برای نمایش امن"""
+        try:
+            from utils.crypto import encrypt_text
+            enc = encrypt_text(password)
+            if enc:
+                self.password_encrypted = enc
+        except Exception:
+            # اگر رمزنگاری در دسترس نبود، فقط هش را نگه می‌داریم
+            pass
+        # همواره هش قدیمی را نیز به‌روزرسانی می‌کنیم (در صورت نیازهای آتی)
+        self.set_password(password)
+    
+    def get_decrypted_password(self):
+        """بازگشایی رمز برای نمایش (اگر موجود باشد)"""
+        if not self.password_encrypted:
+            return None
+        try:
+            from utils.crypto import decrypt_text
+            return decrypt_text(self.password_encrypted)
+        except Exception:
+            return None
     
     def check_password(self, password):
         """بررسی پسورد"""

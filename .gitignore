@@ -1,4 +1,34 @@
-﻿# Environment and secrets
+﻿# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+env/
+venv/
+
+# Flask/Instance
+instance/
+*.db
+*.sqlite
+
+# Env and secrets
+.env
+.env.local
+
+# Logs
+logs/
+*.log
+
+# Uploads / generated files
+static/uploads/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
 freeipa_config.env
 freeipa_config_local.env
 .env

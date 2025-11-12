@@ -1,0 +1,188 @@
+version: '3.8'
+
+services:
+  # سرویس اصلی Flask
+  web:
+    build: .
+    container_name: flask-cms-web-prod
+    restart: unless-stopped
+    env_file:
+      - production.env
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=postgresql://cms_user:${DB_PASSWORD}@db:5432/cms_db
+      - SECRET_KEY=${SECRET_KEY}
+      - REDIS_URL=redis://redis:6379/0
+      - MAIL_SERVER=${MAIL_SERVER}
+      - MAIL_PORT=${MAIL_PORT}
+      - MAIL_USE_TLS=${MAIL_USE_TLS}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+    volumes:
+      - ./static/uploads:/app/static/uploads:Z
+      - ./logs:/app/logs:Z
+      - ./backups:/app/backups:Z
+    depends_on:
+      - db
+      - redis
+    networks:
+      - cms-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; from urllib.error import URLError; url='http://localhost:5000/health';\ntry:\n    resp=urllib.request.urlopen(url, timeout=10); sys.exit(0 if resp.getcode()==200 else 1)\nexcept URLError:\n    sys.exit(1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  # دیتابیس PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: flask-cms-db-prod
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=cms_db
+      - POSTGRES_USER=cms_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+      - ./init-db:/docker-entrypoint-initdb.d
+    networks:
+      - cms-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cms_user -d cms_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  # Redis برای caching و sessions
+  redis:
+    image: redis:7-alpine
+    container_name: flask-cms-redis-prod
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - cms-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+  # Nginx برای reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: flask-cms-nginx-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:Z
+      - ./nginx/conf.d:/etc/nginx/conf.d:Z
+      - ./static:/var/www/static:Z
+      - ./ssl:/etc/nginx/ssl:Z
+      - ./logs/nginx:/var/log/nginx:Z
+    depends_on:
+      - web
+    networks:
+      - cms-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+
+  # pgAdmin برای مدیریت دیتابیس (فقط در محیط production)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: flask-cms-pgadmin-prod
+    restart: unless-stopped
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD}
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - db
+    networks:
+      - cms-network
+    profiles:
+      - tools
+
+  # Backup service (اختیاری)
+  backup:
+    image: postgres:15-alpine
+    container_name: flask-cms-backup
+    restart: "no"
+    environment:
+      - PGPASSWORD=${DB_PASSWORD}
+    volumes:
+      - ./backups:/backups
+      - ./scripts:/scripts
+    depends_on:
+      - db
+    networks:
+      - cms-network
+    command: >
+      sh -c "
+        while true; do
+          pg_dump -h db -U cms_user -d cms_db > /backups/backup_$(date +%Y%m%d_%H%M%S).sql
+          find /backups -name 'backup_*.sql' -mtime +7 -delete
+          sleep 86400
+        done
+      "
+    profiles:
+      - backup
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  cms-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+

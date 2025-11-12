@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block page_title %}راه‌اندازی خزانه{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header"><h5 class="mb-0"><i class="fas fa-lock"></i> راه‌اندازی خزانه شخصی</h5></div>
+      <div class="card-body">
+        <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label class="form-label">مسترپسورد</label>
+            <input type="password" class="form-control" name="master_password" minlength="8" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">تکرار مسترپسورد</label>
+            <input type="password" class="form-control" name="confirm_password" minlength="8" required>
+          </div>
+          <button type="submit" class="btn btn-primary">ایجاد خزانه</button>
+          <a href="{{ url_for('profile') }}" class="btn btn-secondary">انصراف</a>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+

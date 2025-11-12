@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, abort, send_file
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
 from flask_caching import Cache
 from flask_limiter import Limiter
@@ -7,6 +7,7 @@ from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 from datetime import datetime, timezone
 import os
+import base64
 import sqlite3
 import redis
 
@@ -20,8 +21,14 @@ from forms import (LoginForm, UserForm, EditUserForm, ChangePasswordForm,
                   ServerForm, TaskForm, ContentForm, BackupForm,
                   CustomFieldForm, CustomFieldEditForm, SecurityProjectForm, SecurityProjectEditForm,
                   CredentialForm, CredentialEditForm, CredentialSearchForm, BookmarkForm, BookmarkEditForm,
+                  SearchForm,
                   PersonForm, PersonEditForm)
 from logging_config import setup_logging, security_logger
+from flask_migrate import Migrate
+from functools import wraps
+import hashlib
+from cryptography.fernet import Fernet
+from utils.crypto import encrypt_text, decrypt_text, is_crypto_ready
 
 def create_app(config_name='default'):
     app = Flask(__name__)
@@ -34,6 +41,8 @@ def create_app(config_name='default'):
     
     # Initialize extensions
     db.init_app(app)
+    # Migrations
+    Migrate(app, db)
     
     # Initialize CSRF Protection
     csrf = CSRFProtect(app)
@@ -69,11 +78,15 @@ def create_app(config_name='default'):
     # Register custom fields blueprint
     app.register_blueprint(custom_fields_bp)
     app.register_blueprint(freeipa_bp)
-    # Exempt FreeIPA blueprint from CSRF to allow simple HTML forms without Flask-WTF
-    try:
-        csrf.exempt(freeipa_bp)
-    except Exception:
-        pass
+    # CSRF is enabled globally; FreeIPA forms include csrf_token manually
+    
+    # Helpers
+    def _allowed_file(filename: str) -> bool:
+        try:
+            allowed = app.config.get('ALLOWED_EXTENSIONS') or set()
+            return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed
+        except Exception:
+            return False
     
     # Test route to check template changes
     @app.route('/test-template')
@@ -94,7 +107,7 @@ def create_app(config_name='default'):
     # Ensure ActivityLog table has required columns (handles existing DBs without migrations)
     try:
         with app.app_context():
-            engine = db.get_engine()
+            engine = db.engine
             conn = engine.connect()
             try:
                 # Detect existing columns (SQLite and Postgres compatible)
@@ -141,6 +154,98 @@ def create_app(config_name='default'):
         # Silent: do not block app startup if ALTER not supported
         pass
     
+    # Ensure Credential.password_encrypted exists for secure reveal
+    try:
+        with app.app_context():
+            engine = db.engine
+            inspector = db.inspect(engine)
+            cred_columns = {col['name'] for col in inspector.get_columns('credential')}
+            if 'password_encrypted' not in cred_columns:
+                conn = engine.connect()
+                try:
+                    conn.execute(text("ALTER TABLE credential ADD COLUMN password_encrypted TEXT"))
+                finally:
+                    conn.close()
+            if 'encrypted_with' not in cred_columns:
+                conn = engine.connect()
+                try:
+                    conn.execute(text("ALTER TABLE credential ADD COLUMN encrypted_with VARCHAR(16) DEFAULT 'global'"))
+                finally:
+                    conn.close()
+    except Exception:
+        pass
+    
+    # Ensure User vault columns exist (kept for model compatibility; vault is disabled at runtime)
+    try:
+        with app.app_context():
+            engine = db.engine
+            inspector = db.inspect(engine)
+            user_columns = {col['name'] for col in inspector.get_columns('user')}
+            conn = engine.connect()
+            try:
+                if 'vault_kdf_salt' not in user_columns:
+                    conn.execute(text("ALTER TABLE user ADD COLUMN vault_kdf_salt TEXT"))
+                if 'vault_wrapped_dek' not in user_columns:
+                    conn.execute(text("ALTER TABLE user ADD COLUMN vault_wrapped_dek TEXT"))
+                if 'vault_wrapped_alg' not in user_columns:
+                    conn.execute(text("ALTER TABLE user ADD COLUMN vault_wrapped_alg VARCHAR(16)"))
+                if 'vault_kdf_n' not in user_columns:
+                    conn.execute(text("ALTER TABLE user ADD COLUMN vault_kdf_n INTEGER"))
+                if 'vault_kdf_r' not in user_columns:
+                    conn.execute(text("ALTER TABLE user ADD COLUMN vault_kdf_r INTEGER"))
+                if 'vault_kdf_p' not in user_columns:
+                    conn.execute(text("ALTER TABLE user ADD COLUMN vault_kdf_p INTEGER"))
+            finally:
+                conn.close()
+    except Exception:
+        pass
+    
+    # Vault helpers (uses Redis if available)
+    def _get_redis_client():
+        try:
+            return redis.from_url(app.config['REDIS_URL'])
+        except Exception:
+            return None
+    
+    def _session_fernet() -> Fernet:
+        sk = (app.config.get('SECRET_KEY') or 'default-secret-key')
+        key = hashlib.sha256(sk.encode('utf-8')).digest()
+        fkey = base64.urlsafe_b64encode(key)
+        return Fernet(fkey)
+    
+    def _store_vault_session(user_id: int, dek: bytes) -> str:
+        ttl = int(app.config.get('VAULT_SESSION_TTL_SECONDS', 300))
+        f = _session_fernet()
+        token = f.encrypt(dek).decode('utf-8')
+        session['vault_dek'] = token
+        session['vault_user'] = user_id
+        session['vault_exp'] = (datetime.utcnow().timestamp() + ttl)
+        return 'session'
+    
+    def _clear_vault_session():
+        session.pop('vault_dek', None)
+        session.pop('vault_user', None)
+        session.pop('vault_exp', None)
+    
+    def _get_current_user_dek() -> bytes | None:
+        try:
+            uid = session.get('vault_user')
+            token = session.get('vault_dek')
+            exp = session.get('vault_exp')
+            if not uid or not token or not exp:
+                return None
+            if exp < datetime.utcnow().timestamp():
+                _clear_vault_session()
+                return None
+            f = _session_fernet()
+            try:
+                dek = f.decrypt(token.encode('utf-8'))
+                return dek
+            except Exception:
+                return None
+        except Exception:
+            return None
+    
     # Activity logging helper
     def log_activity(action, model_name=None, record_id=None, status_code=None, details=None):
         try:
@@ -166,10 +271,47 @@ def create_app(config_name='default'):
     
     # Make log_activity available globally
     app.log_activity = log_activity
+
+    # Admin-only decorator
+    def admin_required(view_func):
+        @wraps(view_func)
+        @login_required
+        def wrapper(*args, **kwargs):
+            if not current_user.is_authenticated or current_user.role != 'admin':
+                flash('دسترسی غیرمجاز.', 'error')
+                return redirect(url_for('dashboard'))
+            return view_func(*args, **kwargs)
+        return wrapper
+    
+    @app.route('/vault/status')
+    @login_required
+    @admin_required
+    def vault_status():
+        return jsonify({'success': True, 'disabled': True})
     
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
+    
+    # Vault state for templates
+    @app.context_processor
+    def inject_vault_state():
+        is_init = False
+        is_unlocked = False
+        try:
+            if current_user.is_authenticated:
+                # Initialized?
+                try:
+                    is_init = current_user.is_vault_initialized()
+                except Exception:
+                    is_init = False
+                # Unlocked?
+                uid = session.get('vault_user')
+                exp = session.get('vault_exp')
+                is_unlocked = bool(uid == (current_user.id if current_user.is_authenticated else None) and exp and exp > datetime.utcnow().timestamp())
+        except Exception:
+            pass
+        return dict(vault_initialized=is_init, vault_unlocked=is_unlocked)
     
     # Global activity logger for all write requests (fallback)
     @app.after_request
@@ -187,6 +329,30 @@ def create_app(config_name='default'):
                     status_code=response.status_code,
                     details=None
                 )
+        except Exception:
+            pass
+        return response
+    
+    # Security headers
+    @app.after_request
+    def set_security_headers(response):
+        try:
+            # Basic hardening headers
+            response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+            response.headers.setdefault('X-Frame-Options', 'DENY')
+            response.headers.setdefault('Referrer-Policy', 'no-referrer')
+            # Reasonable CSP allowing self, inline for existing templates, and cdnjs for fonts/css
+            csp = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline'; "
+                "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
+                "img-src 'self' data:; "
+                "font-src 'self' https://cdnjs.cloudflare.com data:; "
+                "connect-src 'self'; "
+                "frame-ancestors 'none'; "
+                "upgrade-insecure-requests"
+            )
+            response.headers.setdefault('Content-Security-Policy', csp)
         except Exception:
             pass
         return response
@@ -465,6 +631,7 @@ def create_app(config_name='default'):
     
     @app.route('/servers/add', methods=['GET', 'POST'])
     @login_required
+    @admin_required
     def add_server():
         form = ServerForm()
         if form.validate_on_submit():
@@ -501,6 +668,7 @@ def create_app(config_name='default'):
     
     @app.route('/servers/edit/<int:id>', methods=['GET', 'POST'])
     @login_required
+    @admin_required
     def edit_server(id):
         server = Server.query.get_or_404(id)
         form = ServerForm(obj=server)
@@ -546,6 +714,7 @@ def create_app(config_name='default'):
     
     @app.route('/servers/delete/<int:id>', methods=['POST'])
     @login_required
+    @admin_required
     def delete_server(id):
         server = Server.query.get_or_404(id)
         db.session.delete(server)
@@ -677,7 +846,6 @@ def create_app(config_name='default'):
     
     @app.route('/tasks/delete/<int:id>', methods=['POST'])
     @login_required
-    @csrf.exempt
     def delete_task(id):
         task = Task.query.get_or_404(id)
         db.session.delete(task)
@@ -791,6 +959,89 @@ def create_app(config_name='default'):
         db.session.commit()
         flash('پروژه امنیتی با موفقیت حذف شد.', 'success')
         return redirect(url_for('security_projects'))
+    
+    # Attachments
+    @app.route('/attachments/<model_name>/<int:record_id>')
+    @login_required
+    def attachments(model_name, record_id):
+        items = Attachment.query.filter_by(model_name=model_name, record_id=record_id).order_by(Attachment.created_at.desc()).all()
+        return render_template('attachments.html', model_name=model_name, record_id=record_id, items=items)
+    
+    @app.route('/attachments/<model_name>/<int:record_id>/upload', methods=['POST'])
+    @login_required
+    def attachment_upload(model_name, record_id):
+        file = request.files.get('file')
+        if not file or file.filename == '':
+            flash('فایل انتخاب نشده است.', 'error')
+            return redirect(url_for('attachments', model_name=model_name, record_id=record_id))
+        if not _allowed_file(file.filename):
+            flash('نوع فایل مجاز نیست.', 'error')
+            return redirect(url_for('attachments', model_name=model_name, record_id=record_id))
+        try:
+            filename = secure_filename(file.filename)
+            base_dir = app.config['UPLOAD_FOLDER']
+            target_dir = os.path.join(base_dir, model_name, str(record_id))
+            os.makedirs(target_dir, exist_ok=True)
+            file_path = os.path.join(target_dir, filename)
+            file.save(file_path)
+            size = 0
+            try:
+                size = os.path.getsize(file_path)
+            except Exception:
+                pass
+            att = Attachment(
+                model_name=model_name,
+                record_id=record_id,
+                file_name=filename,
+                file_path=file_path,
+                file_size=size,
+                content_type=file.mimetype,
+                uploaded_by=current_user.id
+            )
+            db.session.add(att)
+            db.session.commit()
+            flash('فایل با موفقیت آپلود شد.', 'success')
+            app.log_activity('upload', model_name, record_id, 200, f'Attachment {filename}')
+        except Exception as e:
+            db.session.rollback()
+            flash('خطا در آپلود فایل.', 'error')
+        return redirect(url_for('attachments', model_name=model_name, record_id=record_id))
+    
+    @app.route('/attachments/<int:attachment_id>/download')
+    @login_required
+    def attachment_download(attachment_id):
+        att = Attachment.query.get_or_404(attachment_id)
+        try:
+            return send_file(att.file_path, as_attachment=True, download_name=att.file_name)
+        except Exception:
+            abort(404)
+    
+    @app.route('/attachments/<int:attachment_id>/delete', methods=['POST'])
+    @login_required
+    def attachment_delete(attachment_id):
+        att = Attachment.query.get_or_404(attachment_id)
+        # اجازه حذف برای ادمین/ادیتور یا آپلودکننده
+        if current_user.role not in ('admin', 'editor') and att.uploaded_by != current_user.id:
+            flash('دسترسی غیرمجاز.', 'error')
+            return redirect(url_for('attachments', model_name=att.model_name, record_id=att.record_id))
+        try:
+            # حذف فایل از دیسک
+            try:
+                if os.path.exists(att.file_path):
+                    os.remove(att.file_path)
+            except Exception:
+                pass
+            model_name = att.model_name
+            record_id = att.record_id
+            db.session.delete(att)
+            db.session.commit()
+            flash('فایل حذف شد.', 'success')
+            app.log_activity('delete', model_name, record_id, 200, f'Delete attachment {att.file_name}')
+            return redirect(url_for('attachments', model_name=model_name, record_id=record_id))
+        except Exception:
+            db.session.rollback()
+            flash('حذف فایل با خطا مواجه شد.', 'error')
+            return redirect(url_for('attachments', model_name=att.model_name, record_id=att.record_id))
     
     # Content management routes (keeping for backward compatibility)
     @app.route('/content')
@@ -910,6 +1161,7 @@ def create_app(config_name='default'):
     
     @app.route('/backups/add', methods=['GET', 'POST'])
     @login_required
+    @admin_required
     def add_backup():
         form = BackupForm()
         if form.validate_on_submit():
@@ -929,6 +1181,7 @@ def create_app(config_name='default'):
     
     @app.route('/backups/edit/<int:id>', methods=['GET', 'POST'])
     @login_required
+    @admin_required
     def edit_backup(id):
         backup = Backup.query.get_or_404(id)
         form = BackupForm(obj=backup)
@@ -949,6 +1202,7 @@ def create_app(config_name='default'):
     
     @app.route('/backups/delete/<int:id>', methods=['POST'])
     @login_required
+    @admin_required
     def delete_backup(id):
         backup = Backup.query.get_or_404(id)
         db.session.delete(backup)
@@ -1056,7 +1310,6 @@ def create_app(config_name='default'):
     # API routes for AJAX
     @app.route('/api/task/<int:id>/status', methods=['POST'])
     @login_required
-    @csrf.exempt
     def update_task_status(id):
         task = Task.query.get_or_404(id)
         new_status = request.json.get('status')
@@ -1336,7 +1589,6 @@ def create_app(config_name='default'):
 
     @app.route('/people/delete/<int:id>', methods=['POST'])
     @login_required
-    @csrf.exempt
     def delete_person(id):
         if current_user.role != 'admin':
             return jsonify({'success': False, 'error': 'دسترسی غیرمجاز'})
@@ -1395,7 +1647,6 @@ def create_app(config_name='default'):
 
     @app.route('/bookmarks/delete/<int:id>', methods=['POST'])
     @login_required
-    @csrf.exempt
     def delete_bookmark(id):
         bookmark = Bookmark.query.filter_by(id=id, created_by=current_user.id).first_or_404()
         db.session.delete(bookmark)
@@ -1450,7 +1701,9 @@ def create_app(config_name='default'):
                 is_active=form.is_active.data,
                 created_by=current_user.id
             )
-            credential.set_password(form.password.data)
+            # Global encryption only
+            credential.set_encrypted_password(form.password.data)
+            credential.encrypted_with = 'global'
             credential.set_tags_list([tag.strip() for tag in form.tags.data.split(',') if tag.strip()])
             
             db.session.add(credential)
@@ -1479,7 +1732,8 @@ def create_app(config_name='default'):
             
             # تغییر رمز عبور اگر ارائه شده
             if form.password.data:
-                credential.set_password(form.password.data)
+                credential.set_encrypted_password(form.password.data)
+                credential.encrypted_with = 'global'
             
             credential.set_tags_list([tag.strip() for tag in form.tags.data.split(',') if tag.strip()])
             credential.updated_at = datetime.utcnow()
@@ -1492,7 +1746,6 @@ def create_app(config_name='default'):
     
     @app.route('/credentials/delete/<int:id>', methods=['POST'])
     @login_required
-    @csrf.exempt
     def delete_credential(id):
         credential = Credential.query.filter_by(id=id, created_by=current_user.id).first_or_404()
         db.session.delete(credential)
@@ -1506,13 +1759,54 @@ def create_app(config_name='default'):
         credential = Credential.query.filter_by(id=id, created_by=current_user.id).first_or_404()
         return render_template('view_credential.html', credential=credential)
     
-    @app.route('/api/credentials/<int:id>/password')
+    @app.route('/api/credentials/<int:id>/password', methods=['POST'])
     @login_required
+    @limiter.limit("5 per minute")
     def get_credential_password(id):
-        credential = Credential.query.filter_by(id=id, created_by=current_user.id).first_or_404()
-        # در اینجا باید رمز عبور را رمزگشایی کنیم - این یک پیاده‌سازی ساده است
-        # در واقعیت باید از کلیدهای رمزنگاری استفاده کنید
-        return jsonify({'password': 'رمز عبور رمزنگاری شده است'})
+        credential = Credential.query.filter_by(id=id).first_or_404()
+        # مجوز: مالک یا نقش‌های مدیر (admin/editor به عنوان مدیر)
+        if credential.created_by != current_user.id and current_user.role not in ('admin', 'editor'):
+            return jsonify({'success': False, 'error': 'دسترسی غیرمجاز'}), 403
+        if not is_crypto_ready():
+            return jsonify({'success': False, 'error': 'کلید رمزنگاری تنظیم نشده است'}), 500
+        if not credential.password_encrypted:
+            return jsonify({'success': False, 'error': 'برای این رمز دادهٔ قابل‌بازیابی ذخیره نشده است. یک‌بار ویرایش و ذخیره کنید.'}), 409
+        value = credential.get_decrypted_password()
+        if not value:
+            return jsonify({'success': False, 'error': 'امکان بازگشایی رمز موجود نیست'}), 500
+        try:
+            app.log_activity('reveal_password', 'Credential', credential.id, 200, f'Revealed by {current_user.username}')
+        except Exception:
+            pass
+        resp = jsonify({'success': True, 'password': value})
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        return resp
+    
+    # Vault endpoints
+    @app.route('/vault/setup', methods=['GET', 'POST'])
+    @login_required
+    def vault_setup():
+        flash('قابلیت خزانه غیرفعال است. رمزها فقط با کلید سازمانی ذخیره می‌شوند.', 'info')
+        return redirect(url_for('credentials'))
+    
+    @app.route('/vault/unlock', methods=['GET', 'POST'])
+    @login_required
+    def vault_unlock():
+        flash('قابلیت خزانه غیرفعال است. نیازی به Unlock نیست.', 'info')
+        return redirect(url_for('credentials'))
+    
+    @app.route('/vault/lock', methods=['POST'])
+    @login_required
+    def vault_lock():
+        flash('قابلیت خزانه غیرفعال است.', 'info')
+        return redirect(url_for('credentials'))
+    
+    @app.route('/vault/reset', methods=['POST'])
+    @login_required
+    def vault_reset():
+        flash('قابلیت خزانه غیرفعال است.', 'info')
+        return redirect(url_for('credentials'))
     
     @app.route('/api/credentials/<int:id>/use', methods=['POST'])
     @login_required
@@ -1712,479 +2006,6 @@ def create_app(config_name='default'):
     def internal_error(error):
         db.session.rollback()
         return render_template('500.html'), 500
-    
-    # FreeIPA Routes
-    @app.route('/freeipa')
-    @login_required
-    def freeipa_dashboard():
-        """داشبورد FreeIPA"""
-        try:
-            freeipa_manager = FreeIPAManager(db.session)
-            
-            # آمار کلی
-            total_users = db.session.query(FreeIPAUser).count()
-            total_groups = db.session.query(FreeIPAGroup).count()
-            active_servers = db.session.query(FreeIPAServer).filter_by(is_active=True).count()
-            
-            # آخرین فعالیت‌ها
-            recent_users = db.session.query(FreeIPAUser).order_by(FreeIPAUser.created_at.desc()).limit(5).all()
-            recent_sms = db.session.query(SMSLog).order_by(SMSLog.created_at.desc()).limit(5).all()
-            
-            return render_template('freeipa/dashboard.html',
-                                 total_users=total_users,
-                                 total_groups=total_groups,
-                                 active_servers=active_servers,
-                                 recent_users=recent_users,
-                                 recent_sms=recent_sms)
-        except Exception as e:
-            flash(f'خطا در بارگذاری داشبورد FreeIPA: {str(e)}', 'error')
-            return redirect(url_for('dashboard'))
-    
-    @app.route('/freeipa/servers')
-    @login_required
-    def freeipa_servers():
-        """لیست سرورهای FreeIPA"""
-        servers = db.session.query(FreeIPAServer).all()
-        return render_template('freeipa/servers.html', servers=servers)
-    
-    @app.route('/freeipa/servers/add', methods=['GET', 'POST'])
-    @login_required
-    def freeipa_add_server():
-        """اضافه کردن سرور FreeIPA"""
-        if request.method == 'POST':
-            try:
-                server = FreeIPAServer(
-                    name=request.form['name'],
-                    hostname=request.form['hostname'],
-                    port=int(request.form['port']),
-                    use_ssl=bool(request.form.get('use_ssl')),
-                    base_dn=request.form['base_dn'],
-                    bind_dn=request.form['bind_dn']
-                )
-                server.set_bind_password(request.form['bind_password'])
-                
-                db.session.add(server)
-                db.session.commit()
-                
-                flash('سرور FreeIPA با موفقیت اضافه شد', 'success')
-                return redirect(url_for('freeipa_servers'))
-            except Exception as e:
-                db.session.rollback()
-                flash(f'خطا در اضافه کردن سرور: {str(e)}', 'error')
-        
-        return render_template('freeipa/add_server.html')
-    
-    @app.route('/freeipa/servers/test/<int:server_id>')
-    @login_required
-    def freeipa_test_server(server_id):
-        """تست اتصال سرور FreeIPA"""
-        try:
-            freeipa_manager = FreeIPAManager(db.session)
-            success, message = freeipa_manager.test_connection(server_id)
-            
-            if success:
-                flash('اتصال به سرور موفقیت‌آمیز بود', 'success')
-            else:
-                flash(f'خطا در اتصال: {message}', 'error')
-        except Exception as e:
-            flash(f'خطا در تست اتصال: {str(e)}', 'error')
-        
-        return redirect(url_for('freeipa_servers'))
-    
-    @app.route('/freeipa/servers/edit/<int:server_id>', methods=['GET', 'POST'])
-    @login_required
-    def freeipa_edit_server(server_id):
-        """ویرایش سرور FreeIPA"""
-        server = db.session.query(FreeIPAServer).get_or_404(server_id)
-        
-        if request.method == 'POST':
-            try:
-                server.name = request.form['name']
-                server.hostname = request.form['hostname']
-                server.port = int(request.form['port'])
-                server.use_ssl = bool(request.form.get('use_ssl'))
-                server.base_dn = request.form['base_dn']
-                server.bind_dn = request.form['bind_dn']
-                server.is_active = bool(request.form.get('is_active'))
-                
-                # تغییر پسورد اگر ارائه شده
-                new_password = request.form.get('bind_password')
-                if new_password:
-                    server.set_bind_password(new_password)
-                
-                db.session.commit()
-                flash('سرور با موفقیت به‌روزرسانی شد', 'success')
-                return redirect(url_for('freeipa_servers'))
-            except Exception as e:
-                db.session.rollback()
-                flash(f'خطا در به‌روزرسانی سرور: {str(e)}', 'error')
-        
-        return render_template('freeipa/edit_server.html', server=server)
-    
-    @app.route('/freeipa/servers/delete/<int:server_id>', methods=['POST'])
-    @login_required
-    def freeipa_delete_server(server_id):
-        """حذف سرور FreeIPA"""
-        try:
-            server = db.session.query(FreeIPAServer).get_or_404(server_id)
-            db.session.delete(server)
-            db.session.commit()
-            flash('سرور با موفقیت حذف شد', 'success')
-        except Exception as e:
-            db.session.rollback()
-            flash(f'خطا در حذف سرور: {str(e)}', 'error')
-        
-        return redirect(url_for('freeipa_servers'))
-    
-    @app.route('/freeipa/users')
-    @login_required
-    def freeipa_users():
-        """لیست کاربران FreeIPA"""
-        page = request.args.get('page', 1, type=int)
-        per_page = 20
-        
-        users = db.session.query(FreeIPAUser).paginate(
-            page=page, per_page=per_page, error_out=False
-        )
-        
-        return render_template('freeipa/users.html', users=users)
-    
-    @app.route('/freeipa/users/add', methods=['GET', 'POST'])
-    @login_required
-    def freeipa_add_user():
-        """اضافه کردن کاربر FreeIPA"""
-        if request.method == 'POST':
-            try:
-                freeipa_manager = FreeIPAManager(db.session)
-                
-                # دریافت گروه‌ها
-                groups = request.form.getlist('groups')
-                
-                success, message, password = freeipa_manager.create_user(
-                    uid=request.form['uid'],
-                    cn=request.form['cn'],
-                    sn=request.form['sn'],
-                    givenname=request.form['givenname'],
-                    mail=request.form['mail'],
-                    mobile=request.form.get('mobile'),
-                    groups=groups,
-                    send_sms=bool(request.form.get('send_sms'))
-                )
-                
-                if success:
-                    flash(f'کاربر با موفقیت ایجاد شد. رمز عبور: {password}', 'success')
-                    return redirect(url_for('freeipa_users'))
-                else:
-                    flash(f'خطا در ایجاد کاربر: {message}', 'error')
-            except Exception as e:
-                flash(f'خطا در ایجاد کاربر: {str(e)}', 'error')
-        
-        # دریافت لیست گروه‌ها
-        groups = db.session.query(FreeIPAGroup).filter_by(is_active=True).all()
-        return render_template('freeipa/add_user.html', groups=groups)
-    
-    @app.route('/freeipa/users/edit/<int:user_id>', methods=['GET', 'POST'])
-    @login_required
-    def freeipa_edit_user(user_id):
-        """ویرایش کاربر FreeIPA"""
-        user = db.session.query(FreeIPAUser).get_or_404(user_id)
-        
-        if request.method == 'POST':
-            try:
-                freeipa_manager = FreeIPAManager(db.session)
-                
-                success, message = freeipa_manager.update_user(
-                    user_id=user_id,
-                    cn=request.form['cn'],
-                    sn=request.form['sn'],
-                    givenname=request.form['givenname'],
-                    mail=request.form['mail'],
-                    mobile=request.form.get('mobile')
-                )
-                
-                if success:
-                    flash('کاربر با موفقیت به‌روزرسانی شد', 'success')
-                    return redirect(url_for('freeipa_users'))
-                else:
-                    flash(f'خطا در به‌روزرسانی: {message}', 'error')
-            except Exception as e:
-                flash(f'خطا در به‌روزرسانی: {str(e)}', 'error')
-        
-        return render_template('freeipa/edit_user.html', user=user)
-    
-    @app.route('/freeipa/users/change-password/<int:user_id>', methods=['POST'])
-    @login_required
-    def freeipa_change_password(user_id):
-        """تغییر پسورد کاربر FreeIPA"""
-        try:
-            freeipa_manager = FreeIPAManager(db.session)
-            
-            new_password = request.form.get('new_password')
-            send_sms = bool(request.form.get('send_sms'))
-            
-            success, message, password = freeipa_manager.change_password(
-                user_id=user_id,
-                new_password=new_password,
-                send_sms=send_sms
-            )
-            
-            if success:
-                flash(f'پسورد با موفقیت تغییر کرد. رمز جدید: {password}', 'success')
-            else:
-                flash(f'خطا در تغییر پسورد: {message}', 'error')
-        except Exception as e:
-            flash(f'خطا در تغییر پسورد: {str(e)}', 'error')
-        
-        return redirect(url_for('freeipa_users'))
-    
-    @app.route('/freeipa/users/passwords/<int:user_id>')
-    @login_required
-    def freeipa_user_passwords(user_id):
-        """لیست پسوردهای کاربر"""
-        user = db.session.query(FreeIPAUser).get_or_404(user_id)
-        freeipa_manager = FreeIPAManager(db.session)
-        passwords = freeipa_manager.get_user_passwords(user_id)
-        
-        return render_template('freeipa/user_passwords.html', user=user, passwords=passwords)
-    
-    @app.route('/freeipa/users/resend-sms/<int:password_id>', methods=['POST'])
-    @login_required
-    def freeipa_resend_sms(password_id):
-        """ارسال مجدد پیامک پسورد"""
-        try:
-            freeipa_manager = FreeIPAManager(db.session)
-            success, message = freeipa_manager.resend_password_sms(password_id)
-            
-            if success:
-                flash('پیامک با موفقیت ارسال شد', 'success')
-            else:
-                flash(f'خطا در ارسال پیامک: {message}', 'error')
-        except Exception as e:
-            flash(f'خطا در ارسال پیامک: {str(e)}', 'error')
-        
-        return redirect(request.referrer or url_for('freeipa_users'))
-    
-    @app.route('/freeipa/groups')
-    @login_required
-    def freeipa_groups():
-        """لیست گروه‌های FreeIPA"""
-        groups = db.session.query(FreeIPAGroup).all()
-        return render_template('freeipa/groups.html', groups=groups)
-    
-    @app.route('/freeipa/groups/add', methods=['GET', 'POST'])
-    @login_required
-    def freeipa_add_group():
-        """اضافه کردن گروه FreeIPA"""
-        if request.method == 'POST':
-            try:
-                freeipa_manager = FreeIPAManager(db.session)
-                
-                success, message = freeipa_manager.create_group(
-                    cn=request.form['cn'],
-                    description=request.form.get('description')
-                )
-                
-                if success:
-                    flash('گروه با موفقیت ایجاد شد', 'success')
-                    return redirect(url_for('freeipa_groups'))
-                else:
-                    flash(f'خطا در ایجاد گروه: {message}', 'error')
-            except Exception as e:
-                flash(f'خطا در ایجاد گروه: {str(e)}', 'error')
-        
-        return render_template('freeipa/add_group.html')
-    
-    @app.route('/freeipa/groups/edit/<int:group_id>', methods=['GET', 'POST'])
-    @login_required
-    def freeipa_edit_group(group_id):
-        """ویرایش گروه FreeIPA"""
-        group = FreeIPAGroup.query.get_or_404(group_id)
-        
-        if request.method == 'POST':
-            try:
-                group.cn = request.form['cn']
-                group.description = request.form.get('description')
-                group.is_active = 'is_active' in request.form
-                
-                db.session.commit()
-                flash('گروه با موفقیت ویرایش شد', 'success')
-                return redirect(url_for('freeipa_groups'))
-            except Exception as e:
-                flash(f'خطا در ویرایش گروه: {str(e)}', 'error')
-        
-        return render_template('freeipa/edit_group.html', group=group)
-    
-    @app.route('/freeipa/groups/delete/<int:group_id>', methods=['POST'])
-    @login_required
-    def freeipa_delete_group(group_id):
-        """حذف گروه FreeIPA"""
-        try:
-            freeipa_manager = FreeIPAManager(db.session)
-            success, message = freeipa_manager.delete_group(group_id)
-            
-            if success:
-                flash('گروه با موفقیت حذف شد', 'success')
-            else:
-                flash(f'خطا در حذف گروه: {message}', 'error')
-        except Exception as e:
-            flash(f'خطا در حذف گروه: {str(e)}', 'error')
-        
-        return redirect(url_for('freeipa_groups'))
-    
-    @app.route('/freeipa/users/delete/<int:user_id>', methods=['POST'])
-    @login_required
-    def freeipa_delete_user(user_id):
-        """حذف کاربر FreeIPA"""
-        try:
-            freeipa_manager = FreeIPAManager(db.session)
-            success, message = freeipa_manager.delete_user(user_id)
-            
-            if success:
-                flash('کاربر با موفقیت حذف شد', 'success')
-            else:
-                flash(f'خطا در حذف کاربر: {message}', 'error')
-        except Exception as e:
-            flash(f'خطا در حذف کاربر: {str(e)}', 'error')
-        
-        return redirect(url_for('freeipa_users'))
-    
-    @app.route('/freeipa/users/add-to-group/<int:user_id>', methods=['POST'])
-    @login_required
-    def freeipa_add_user_to_group(user_id):
-        """اضافه کردن کاربر به گروه"""
-        try:
-            freeipa_manager = FreeIPAManager(db.session)
-            
-            group_cn = request.form['group_cn']
-            success, message = freeipa_manager.add_user_to_group(user_id, group_cn)
-            
-            if success:
-                flash('کاربر با موفقیت به گروه اضافه شد', 'success')
-            else:
-                flash(f'خطا در اضافه کردن به گروه: {message}', 'error')
-        except Exception as e:
-            flash(f'خطا در اضافه کردن به گروه: {str(e)}', 'error')
-        
-        return redirect(request.referrer or url_for('freeipa_users'))
-    
-    @app.route('/freeipa/users/remove-from-group/<int:user_id>', methods=['POST'])
-    @login_required
-    def freeipa_remove_user_from_group(user_id):
-        """حذف کاربر از گروه"""
-        try:
-            freeipa_manager = FreeIPAManager(db.session)
-            
-            group_cn = request.form['group_cn']
-            success, message = freeipa_manager.remove_user_from_group(user_id, group_cn)
-            
-            if success:
-                flash('کاربر با موفقیت از گروه حذف شد', 'success')
-            else:
-                flash(f'خطا در حذف از گروه: {message}', 'error')
-        except Exception as e:
-            flash(f'خطا در حذف از گروه: {str(e)}', 'error')
-        
-        return redirect(request.referrer or url_for('freeipa_users'))
-    
-    @app.route('/freeipa/sync')
-    @login_required
-    def freeipa_sync():
-        """همگام‌سازی با FreeIPA"""
-        try:
-            freeipa_manager = FreeIPAManager(db.session)
-            success, message = freeipa_manager.sync_users_from_freeipa()
-            
-            if success:
-                flash(message, 'success')
-            else:
-                flash(f'خطا در همگام‌سازی: {message}', 'error')
-        except Exception as e:
-            flash(f'خطا در همگام‌سازی: {str(e)}', 'error')
-        
-        return redirect(url_for('freeipa_dashboard'))
-    
-    @app.route('/freeipa/sms-templates')
-    @login_required
-    def freeipa_sms_templates():
-        """لیست قالب‌های پیامک"""
-        templates = db.session.query(SMSTemplate).all()
-        return render_template('freeipa/sms_templates.html', templates=templates)
-    
-    @app.route('/freeipa/sms-templates/add', methods=['GET', 'POST'])
-    @login_required
-    def freeipa_add_sms_template():
-        """اضافه کردن قالب پیامک"""
-        if request.method == 'POST':
-            try:
-                template = SMSTemplate(
-                    name=request.form['name'],
-                    template=request.form['template'],
-                    is_active=bool(request.form.get('is_active'))
-                )
-                
-                # تنظیم متغیرها
-                variables = request.form.getlist('variables')
-                template.set_variables_list(variables)
-                
-                db.session.add(template)
-                db.session.commit()
-                
-                flash('قالب پیامک با موفقیت اضافه شد', 'success')
-                return redirect(url_for('freeipa_sms_templates'))
-            except Exception as e:
-                db.session.rollback()
-                flash(f'خطا در اضافه کردن قالب: {str(e)}', 'error')
-        
-        return render_template('freeipa/add_sms_template.html')
-    
-    @app.route('/freeipa/sms-logs')
-    @login_required
-    def freeipa_sms_logs():
-        """لاگ‌های ارسال پیامک"""
-        page = request.args.get('page', 1, type=int)
-        per_page = 20
-        
-        logs = db.session.query(SMSLog).order_by(SMSLog.created_at.desc()).paginate(
-            page=page, per_page=per_page, error_out=False
-        )
-        
-        return render_template('freeipa/sms_logs.html', logs=logs)
-    
-    @app.route('/freeipa/sms-templates/edit/<int:template_id>', methods=['GET', 'POST'])
-    @login_required
-    def freeipa_edit_sms_template(template_id):
-        """ویرایش قالب پیامک"""
-        template = db.session.query(SMSTemplate).get_or_404(template_id)
-        
-        if request.method == 'POST':
-            try:
-                template.name = request.form['name']
-                template.template = request.form['template']
-                template.is_active = bool(request.form.get('is_active'))
-                
-                db.session.commit()
-                flash('قالب با موفقیت به‌روزرسانی شد', 'success')
-                return redirect(url_for('freeipa_sms_templates'))
-            except Exception as e:
-                db.session.rollback()
-                flash(f'خطا در به‌روزرسانی قالب: {str(e)}', 'error')
-        
-        return render_template('freeipa/edit_sms_template.html', template=template)
-    
-    @app.route('/freeipa/sms-templates/delete/<int:template_id>', methods=['POST'])
-    @login_required
-    def freeipa_delete_sms_template(template_id):
-        """حذف قالب پیامک"""
-        try:
-            template = db.session.query(SMSTemplate).get_or_404(template_id)
-            db.session.delete(template)
-            db.session.commit()
-            flash('قالب با موفقیت حذف شد', 'success')
-        except Exception as e:
-            db.session.rollback()
-            flash(f'خطا در حذف قالب: {str(e)}', 'error')
-        
-        return redirect(url_for('freeipa_sms_templates'))
     
     return app
 

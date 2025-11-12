@@ -3,6 +3,7 @@ Route های FreeIPA برای Flask CMS
 """
 
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
+from flask_login import current_user
 from datetime import datetime, timedelta
 from freeipa_service import freeipa_service
 import logging
@@ -11,6 +12,15 @@ logger = logging.getLogger(__name__)
 
 # ایجاد Blueprint
 freeipa_bp = Blueprint('freeipa', __name__, url_prefix='/freeipa')
+
+@freeipa_bp.before_request
+def _require_login_for_freeipa():
+    try:
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+    except Exception:
+        # در صورت بروز خطا در دسترسی به current_user، امن‌ترین رفتار: ارجاع به صفحه ورود
+        return redirect(url_for('login'))
 
 @freeipa_bp.route('/')
 def dashboard():
