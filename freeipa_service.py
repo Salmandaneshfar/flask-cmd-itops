@@ -3,6 +3,7 @@
 """
 
 import os
+from typing import Optional, Tuple
 from ldap3 import Server, Connection, ALL, SUBTREE
 from flask import current_app
 import logging
@@ -189,7 +190,7 @@ class FreeIPAService:
             logger.error(f"خطا در حذف کاربر از گروه: {e}")
             return False
 
-    def set_user_password(self, username: str, new_password: str, old_password: str | None = None):
+    def set_user_password(self, username: str, new_password: str, old_password: Optional[str] = None):
         """تعیین/ریست پسورد کاربر با Password Modify Extended Operation تا اجبار تغییر رفع شود."""
         try:
             config = self._get_config()
@@ -272,7 +273,7 @@ class FreeIPAService:
             logger.error(f"خطا در تنظیم پسورد کاربر (extended op): {e}")
             return False, str(e)
     
-    def _adjust_user_expirations(self, username: str, rel_days: int | None, rel_hours: int | None, unset: bool = False) -> tuple[bool, str]:
+    def _adjust_user_expirations(self, username: str, rel_days: Optional[int], rel_hours: Optional[int], unset: bool = False) -> Tuple[bool, str]:
         """تنظیم خودکار انقضاها: krbPasswordExpiration بسیار دور، unlock، و krbPrincipalExpiration نسبی یا حذف."""
         try:
             from datetime import datetime, timedelta
