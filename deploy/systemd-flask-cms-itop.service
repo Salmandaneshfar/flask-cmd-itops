@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
+User=rocky
+Group=rocky
 WorkingDirectory=/opt/flask-cms-itop
 Environment="FLASK_ENV=production"
 EnvironmentFile=/opt/flask-cms-itop/.env
