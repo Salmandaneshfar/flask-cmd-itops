@@ -1,4 +1,6 @@
-bind = "127.0.0.1:8000"
+import os
+
+bind = os.getenv("GUNICORN_BIND", "127.0.0.1:8000")
 workers = 3
 worker_class = "gthread"
 threads = 4

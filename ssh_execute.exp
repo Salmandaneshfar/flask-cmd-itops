@@ -1,0 +1,35 @@
+#!/usr/bin/expect -f
+set timeout 300
+set server "188.121.105.3"
+set user "rocky"
+set password "admin@123"
+set script_path "/opt/flask-cms-itop/deploy_rocky.sh"
+
+spawn ssh -o StrictHostKeyChecking=no $user@$server
+expect {
+    "password:" {
+        send "$password\r"
+        exp_continue
+    }
+    "$ " {
+        send "cd /opt/flask-cms-itop && git pull\r"
+        expect "$ "
+        send "chmod +x deploy_rocky.sh\r"
+        expect "$ "
+        send "./deploy_rocky.sh\r"
+        expect "$ "
+        send "exit\r"
+    }
+    "# " {
+        send "cd /opt/flask-cms-itop && git pull\r"
+        expect "# "
+        send "chmod +x deploy_rocky.sh\r"
+        expect "# "
+        send "./deploy_rocky.sh\r"
+        expect "# "
+        send "exit\r"
+    }
+}
+expect eof
+
+

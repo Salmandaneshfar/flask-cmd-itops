@@ -78,3 +78,4 @@ echo "To view logs: docker compose logs -f flask"
 echo "To stop: docker compose down"
 echo "To restart: docker compose restart"
 
+
