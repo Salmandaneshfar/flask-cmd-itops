@@ -88,9 +88,10 @@ class DevelopmentConfig(Config):
 class ProductionConfig(Config):
     DEBUG = False
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or f"sqlite:///{DEFAULT_SQLITE_PATH}"
-    # Prefer secure cookies in production by default (can be overridden via env)
-    SESSION_COOKIE_SECURE = True
-    REMEMBER_COOKIE_SECURE = True
+    # Secure cookies only if HTTPS is enabled (can be overridden via env)
+    # For HTTP, set SESSION_COOKIE_SECURE=false and REMEMBER_COOKIE_SECURE=false in .env
+    SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() in ['true', 'on', '1']
+    REMEMBER_COOKIE_SECURE = os.environ.get('REMEMBER_COOKIE_SECURE', 'false').lower() in ['true', 'on', '1']
 
 class TestingConfig(Config):
     TESTING = True
