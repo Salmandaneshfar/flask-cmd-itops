@@ -6,6 +6,7 @@ from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 from datetime import datetime, timezone
+from typing import Optional
 import os
 import base64
 import sqlite3
@@ -227,7 +228,7 @@ def create_app(config_name='default'):
         session.pop('vault_user', None)
         session.pop('vault_exp', None)
     
-    def _get_current_user_dek() -> bytes | None:
+    def _get_current_user_dek() -> Optional[bytes]:
         try:
             uid = session.get('vault_user')
             token = session.get('vault_dek')
